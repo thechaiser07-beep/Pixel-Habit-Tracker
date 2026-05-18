@@ -42,6 +42,7 @@ let chartRange     = 7;
 let busy           = false;
 let todoEditId     = null;
 let tdDragId       = null;
+let kbDragId       = null;
 let reorderTimer   = null;
 const openPanels   = new Set(); // tracks which subtask panels are expanded
 
@@ -145,7 +146,7 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','calendar','categories','archive','graph','todo','daily'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph','todo','kanban','daily'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
@@ -153,6 +154,7 @@ function nav(id) {
   if (id === 'archive')    renderArchive();
   if (id === 'calendar')   renderCalendar();
   if (id === 'todo')       renderTodo();
+  if (id === 'kanban')     renderKanban();
   if (id === 'daily')      renderDaily();
 }
 
@@ -1071,17 +1073,21 @@ async function toggleTodo(id) {
     await completeDailyTodo(id);
     return;
   }
-  const was = t.completed;
-  t.completed = !was;
+  const was       = t.completed;
+  const wasStatus = t.status || (was ? 'done' : 'todo');
+  t.completed     = !was;
+  t.status        = t.completed ? 'done' : 'todo';
   saveTodosToLS();
   renderTodo();
+  if (document.getElementById('page-kanban').classList.contains('active')) renderKanban();
 
   const { error } = await sb.from('todos')
-    .update({ completed: t.completed })
+    .update({ completed: t.completed, status: t.status })
     .eq('id', id).eq('user_id', USER_ID);
 
   if (error) {
     t.completed = was;
+    t.status    = wasStatus;
     saveTodosToLS();
     renderTodo();
     toast('Sync error — try again');
@@ -1420,6 +1426,134 @@ function renderTodo() {
   openPanels.forEach(id => {
     const el = document.getElementById(`subtasks-${id}`);
     if (el) el.style.display = 'block';
+  });
+}
+
+/* ════════════════════════════════
+   KANBAN BOARD
+════════════════════════════════ */
+function todoStatus(t) {
+  if (t.status) return t.status;
+  return t.completed ? 'done' : 'todo';
+}
+
+async function moveCard(id, newStatus) {
+  const t = todos.find(t => t.id === id);
+  if (!t) return;
+  const prevStatus    = t.status || todoStatus(t);
+  const prevCompleted = t.completed;
+  t.status    = newStatus;
+  t.completed = newStatus === 'done';
+  saveTodosToLS();
+  renderKanban();
+  if (document.getElementById('page-todo').classList.contains('active')) renderTodo();
+
+  const { error } = await sb.from('todos')
+    .update({ status: newStatus, completed: t.completed })
+    .eq('id', id).eq('user_id', USER_ID);
+
+  if (error) {
+    t.status    = prevStatus;
+    t.completed = prevCompleted;
+    saveTodosToLS();
+    renderKanban();
+    toast('Sync error — try again');
+  }
+}
+
+/* ── Kanban drag & drop ── */
+function kbDragStart(e, id) {
+  kbDragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => {
+    const el = document.getElementById('kb-' + id);
+    if (el) el.classList.add('kb-dragging');
+  }, 0);
+}
+function kbDragOver(e, status) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+  const col = document.getElementById('kb-col-' + status);
+  if (col) col.classList.add('kb-col-over');
+}
+function kbDragLeave(e) {
+  /* Only clear if leaving the board entirely */
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+  }
+}
+function kbDragEnd() {
+  document.querySelectorAll('.kb-card').forEach(c => c.classList.remove('kb-dragging'));
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+  kbDragId = null;
+}
+function kbDrop(e, status) {
+  e.preventDefault();
+  document.querySelectorAll('.kanban-col').forEach(c => c.classList.remove('kb-col-over'));
+  if (!kbDragId) return;
+  const t = todos.find(t => t.id === kbDragId);
+  if (!t || todoStatus(t) === status) return;
+  moveCard(kbDragId, status);
+}
+
+/* ── Kanban render ── */
+function renderKanban() {
+  if (!document.getElementById('kb-cards-todo')) return;
+  const today = todayKey();
+
+  const cols = { todo: [], in_progress: [], done: [] };
+  todos.forEach(t => {
+    const s = todoStatus(t);
+    if (cols[s]) cols[s].push(t);
+  });
+
+  const colMeta = {
+    todo:        { prev: null,          next: 'in_progress' },
+    in_progress: { prev: 'todo',        next: 'done'        },
+    done:        { prev: 'in_progress', next: null          }
+  };
+  const colLabel = { todo: 'To Do', in_progress: 'In Prog', done: 'Done' };
+
+  Object.entries(cols).forEach(([status, items]) => {
+    document.getElementById(`kb-count-${status}`).textContent = items.length;
+    const { prev, next } = colMeta[status];
+
+    document.getElementById(`kb-cards-${status}`).innerHTML = items.length
+      ? items.map(t => {
+          const prioKey = t.priority || 'medium';
+          const isOverdue  = !t.completed && t.due_date && t.due_date < today;
+          const isDueToday = !t.completed && t.due_date === today;
+
+          let dueBadge = '';
+          if (t.due_date) {
+            if (isOverdue)   dueBadge = `<span class="todo-due-badge overdue">⚠ ${fmtDate(t.due_date)}</span>`;
+            else if (isDueToday) dueBadge = `<span class="todo-due-badge due-today">Today</span>`;
+            else             dueBadge = `<span class="todo-due-badge">${fmtDate(t.due_date)}</span>`;
+          }
+          const tagChips = (t.tags || []).map(tag => `<span class="todo-tag">${tag}</span>`).join('');
+
+          return `
+          <div class="kb-card prio-${prioKey}" id="kb-${t.id}"
+               draggable="true"
+               ondragstart="kbDragStart(event,'${t.id}')"
+               ondragend="kbDragEnd()">
+            <div class="kb-card-text"
+                 ondblclick="startEditTodo('${t.id}',this)"
+                 title="Double-click to edit">${t.text}</div>
+            <div class="kb-card-meta">
+              <span class="todo-prio-badge prio-${prioKey}">${prioKey}</span>
+              ${tagChips}${dueBadge}
+            </div>
+            <div class="kb-card-actions">
+              ${prev ? `<button class="kb-move-btn" onclick="moveCard('${t.id}','${prev}')" title="Move to ${colLabel[prev]}">← ${colLabel[prev]}</button>` : ''}
+              ${next ? `<button class="kb-move-btn fwd" onclick="moveCard('${t.id}','${next}')" title="Move to ${colLabel[next]}">${colLabel[next]} →</button>` : ''}
+              <button class="kb-icon-btn" onclick="openTodoModal('${t.id}')" title="Edit">✎</button>
+              <button class="kb-icon-btn del" onclick="deleteTodo('${t.id}')" title="Delete">×</button>
+            </div>
+          </div>`;
+        }).join('')
+      : `<div class="kb-empty-col">Drop tasks here</div>`;
   });
 }
 

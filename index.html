@@ -46,6 +46,10 @@
       <span class="nav-icon">☑</span>
       <span>Tasks</span>
     </div>
+    <div class="nav-item" onclick="nav('kanban')">
+      <span class="nav-icon">▥</span>
+      <span>Kanban</span>
+    </div>
     <div class="nav-item" onclick="nav('daily')">
       <span class="nav-icon">◈</span>
       <span>Daily</span>
@@ -173,6 +177,50 @@
       </div>
       <div class="section-label" style="margin-top:26px">Habit stats</div>
       <div class="hstat-grid" id="gr-stats"></div>
+    </div>
+  </div>
+
+  <!-- ── KANBAN PAGE ── -->
+  <div class="page" id="page-kanban">
+    <div class="page-header">
+      <div class="page-title">Kanban</div>
+      <button class="btn btn-primary" onclick="openTodoModal()">+ Add task</button>
+    </div>
+    <div class="kanban-board">
+
+      <div class="kanban-col" id="kb-col-todo"
+           ondragover="kbDragOver(event,'todo')"
+           ondrop="kbDrop(event,'todo')"
+           ondragleave="kbDragLeave(event)">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">To Do</span>
+          <span class="kanban-count" id="kb-count-todo">0</span>
+        </div>
+        <div class="kanban-cards" id="kb-cards-todo"></div>
+      </div>
+
+      <div class="kanban-col" id="kb-col-in_progress"
+           ondragover="kbDragOver(event,'in_progress')"
+           ondrop="kbDrop(event,'in_progress')"
+           ondragleave="kbDragLeave(event)">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">In Progress</span>
+          <span class="kanban-count" id="kb-count-in_progress">0</span>
+        </div>
+        <div class="kanban-cards" id="kb-cards-in_progress"></div>
+      </div>
+
+      <div class="kanban-col" id="kb-col-done"
+           ondragover="kbDragOver(event,'done')"
+           ondrop="kbDrop(event,'done')"
+           ondragleave="kbDragLeave(event)">
+        <div class="kanban-col-header">
+          <span class="kanban-col-title">Done</span>
+          <span class="kanban-count" id="kb-count-done">0</span>
+        </div>
+        <div class="kanban-cards" id="kb-cards-done"></div>
+      </div>
+
     </div>
   </div>
 

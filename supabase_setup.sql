@@ -71,7 +71,10 @@ create policy "anon_all_categories"
   with check (true);
 
 
--- 3c. ARCHIVE FLAG on habits
+-- 3c. STATUS column on todos (kanban)
+alter table public.todos add column if not exists status text not null default 'todo';
+
+-- 3d. ARCHIVE FLAG on habits
 alter table public.habits add column if not exists archived boolean not null default false;
 
 
