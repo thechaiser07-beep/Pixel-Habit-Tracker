@@ -50,6 +50,14 @@
       <span class="nav-icon">▥</span>
       <span>Kanban</span>
     </div>
+    <div class="nav-item" onclick="nav('timeline')">
+      <span class="nav-icon">╾</span>
+      <span>Timeline</span>
+    </div>
+    <div class="nav-item" onclick="nav('taskcal')">
+      <span class="nav-icon">▦</span>
+      <span>Calendar</span>
+    </div>
     <div class="nav-item" onclick="nav('daily')">
       <span class="nav-icon">◈</span>
       <span>Daily</span>
@@ -222,6 +230,28 @@
       </div>
 
     </div>
+  </div>
+
+  <!-- ── TIMELINE PAGE ── -->
+  <div class="page" id="page-timeline">
+    <div class="page-header">
+      <div class="page-title">Timeline</div>
+      <button class="btn btn-primary" onclick="openTodoModal()">+ Add task</button>
+    </div>
+    <div id="timeline-content"></div>
+  </div>
+
+  <!-- ── TASK CALENDAR PAGE ── -->
+  <div class="page" id="page-taskcal">
+    <div class="page-header">
+      <div class="page-title">Calendar</div>
+      <div class="month-nav" style="margin-bottom:0">
+        <button class="month-btn" onclick="shiftTaskCal(-1)">‹</button>
+        <span class="month-name" id="taskcal-month"></span>
+        <button class="month-btn" onclick="shiftTaskCal(1)">›</button>
+      </div>
+    </div>
+    <div id="taskcal-content"></div>
   </div>
 
   <!-- ── DAILY PAGE ── -->

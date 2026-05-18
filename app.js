@@ -36,6 +36,7 @@ let subtasks       = [];
 let selColor       = PALETTE[0];
 let selCatColor    = PALETTE[0];
 let viewMonth      = new Date(); viewMonth.setDate(1);
+let taskCalMonth   = new Date(); taskCalMonth.setDate(1);
 let calYear        = new Date().getFullYear();
 let chart          = null;
 let chartRange     = 7;
@@ -146,7 +147,7 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','calendar','categories','archive','graph','todo','kanban','daily'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph','todo','kanban','timeline','taskcal','daily'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
@@ -155,6 +156,8 @@ function nav(id) {
   if (id === 'calendar')   renderCalendar();
   if (id === 'todo')       renderTodo();
   if (id === 'kanban')     renderKanban();
+  if (id === 'timeline')   renderTimeline();
+  if (id === 'taskcal')    renderTaskCal();
   if (id === 'daily')      renderDaily();
 }
 
@@ -1427,6 +1430,157 @@ function renderTodo() {
     const el = document.getElementById(`subtasks-${id}`);
     if (el) el.style.display = 'block';
   });
+}
+
+/* ════════════════════════════════
+   TIMELINE
+════════════════════════════════ */
+function renderTimeline() {
+  if (!document.getElementById('timeline-content')) return;
+
+  const now = new Date(); now.setHours(0,0,0,0);
+  const today = todayKey();
+  const tom   = new Date(now); tom.setDate(tom.getDate() + 1);
+  const tomKey = dk(tom.getFullYear(), tom.getMonth(), tom.getDate());
+  const wkEnd  = new Date(now); wkEnd.setDate(wkEnd.getDate() + 7);
+  const wkKey  = dk(wkEnd.getFullYear(), wkEnd.getMonth(), wkEnd.getDate());
+
+  const GROUPS = [
+    { key: 'overdue',     label: 'Overdue',     color: '#ef4444', tasks: [] },
+    { key: 'today',       label: 'Today',       color: '#eab308', tasks: [] },
+    { key: 'tomorrow',    label: 'Tomorrow',    color: '#f97316', tasks: [] },
+    { key: 'week',        label: 'This Week',   color: '#9d7de8', tasks: [] },
+    { key: 'later',       label: 'Later',       color: '#10b981', tasks: [] },
+    { key: 'unscheduled', label: 'Unscheduled', color: '#8b949e', tasks: [] },
+    { key: 'done',        label: 'Done',        color: '#3d444d', tasks: [] },
+  ];
+
+  todos.forEach(t => {
+    if (t.completed || todoStatus(t) === 'done') {
+      GROUPS[6].tasks.push(t); return;
+    }
+    if (!t.due_date)             { GROUPS[5].tasks.push(t); return; }
+    if (t.due_date < today)        GROUPS[0].tasks.push(t);
+    else if (t.due_date === today) GROUPS[1].tasks.push(t);
+    else if (t.due_date === tomKey) GROUPS[2].tasks.push(t);
+    else if (t.due_date <= wkKey)  GROUPS[3].tasks.push(t);
+    else                           GROUPS[4].tasks.push(t);
+  });
+
+  GROUPS.forEach(g => g.tasks.sort((a, b) =>
+    (a.due_date || 'z').localeCompare(b.due_date || 'z')));
+
+  const active = GROUPS.filter(g => g.tasks.length);
+  if (!active.length) {
+    document.getElementById('timeline-content').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">╾</div>
+        <div class="empty-title">No tasks yet</div>
+        <p>Add tasks with due dates to see them on the timeline.</p>
+        <button class="btn btn-primary" onclick="openTodoModal()">Add task</button>
+      </div>`;
+    return;
+  }
+
+  document.getElementById('timeline-content').innerHTML = active.map(g => `
+    <div class="tl-section">
+      <div class="tl-header">
+        <div class="tl-dot" style="background:${g.color}"></div>
+        <span class="tl-label" style="color:${g.color}">${g.label}</span>
+        <span class="tl-count">${g.tasks.length} task${g.tasks.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="tl-items">
+        ${g.tasks.map(t => {
+          const prioKey  = t.priority || 'medium';
+          const tagChips = (t.tags || []).map(tag => `<span class="todo-tag">${tag}</span>`).join('');
+          const st       = todoStatus(t);
+          const inProg   = st === 'in_progress'
+            ? `<span class="tl-status-badge">In Progress</span>` : '';
+          return `
+          <div class="tl-item${t.completed ? ' tl-done' : ''}">
+            <div class="tl-item-inner">
+              <button class="todo-check${t.completed ? ' checked' : ''}"
+                      onclick="toggleTodo('${t.id}')"></button>
+              <div class="todo-content">
+                <div class="todo-text${t.completed ? ' td-strikethrough' : ''}"
+                     ondblclick="startEditTodo('${t.id}',this)">${t.text}</div>
+                <div class="todo-meta">
+                  <span class="todo-prio-badge prio-${prioKey}">${prioKey}</span>
+                  ${tagChips}
+                  ${t.due_date ? `<span class="todo-due-badge">${fmtDate(t.due_date)}</span>` : ''}
+                  ${inProg}
+                </div>
+              </div>
+              <div class="todo-actions">
+                <button class="todo-action-btn" onclick="openTodoModal('${t.id}')" title="Edit">✎</button>
+                <button class="todo-action-btn del" onclick="deleteTodo('${t.id}')" title="Delete">×</button>
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+/* ════════════════════════════════
+   TASK CALENDAR
+════════════════════════════════ */
+function shiftTaskCal(dir) {
+  taskCalMonth.setMonth(taskCalMonth.getMonth() + dir);
+  renderTaskCal();
+}
+
+function renderTaskCal() {
+  if (!document.getElementById('taskcal-content')) return;
+
+  const yr      = taskCalMonth.getFullYear();
+  const mo      = taskCalMonth.getMonth();
+  const days    = new Date(yr, mo + 1, 0).getDate();
+  const firstDow = new Date(yr, mo, 1).getDay(); // 0 = Sun
+  const today   = todayKey();
+  const moPrefix = `${yr}-${String(mo + 1).padStart(2, '0')}`;
+
+  document.getElementById('taskcal-month').textContent = `${MONTHS[mo]} ${yr}`;
+
+  /* Build date → tasks map for this month */
+  const taskMap = {};
+  todos.forEach(t => {
+    if (!t.due_date || !t.due_date.startsWith(moPrefix)) return;
+    if (!taskMap[t.due_date]) taskMap[t.due_date] = [];
+    taskMap[t.due_date].push(t);
+  });
+
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html = `<div class="taskcal-wrap"><div class="taskcal-grid">`;
+
+  /* Day-of-week headers */
+  DOW.forEach(d => { html += `<div class="taskcal-dow">${d}</div>`; });
+
+  /* Blank cells before the 1st */
+  for (let i = 0; i < firstDow; i++) {
+    html += `<div class="taskcal-cell tc-other"></div>`;
+  }
+
+  /* Day cells */
+  for (let d = 1; d <= days; d++) {
+    const key    = dk(yr, mo, d);
+    const isToday = key === today;
+    const tasks  = taskMap[key] || [];
+    const shown  = tasks.slice(0, 3);
+    const extra  = tasks.length - 3;
+
+    html += `<div class="taskcal-cell${isToday ? ' tc-today' : ''}">
+      <div class="tc-day-num${isToday ? ' tc-today-num' : ''}">${d}</div>
+      ${shown.map(t => `
+        <div class="tc-chip prio-${t.priority || 'medium'}${t.completed ? ' done' : ''}"
+             onclick="openTodoModal('${t.id}')"
+             title="${t.text}">${t.text}</div>`).join('')}
+      ${extra > 0 ? `<div class="tc-more">+${extra} more</div>` : ''}
+    </div>`;
+  }
+
+  html += `</div></div>`;
+  document.getElementById('taskcal-content').innerHTML = html;
 }
 
 /* ════════════════════════════════
