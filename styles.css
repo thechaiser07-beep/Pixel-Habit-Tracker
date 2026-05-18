@@ -65,6 +65,15 @@ body {
   border-left-color: var(--accent-light);
 }
 .nav-icon { font-size: 15px; opacity: 0.7; }
+.nav-section-label {
+  padding: 6px 22px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--dim);
+  user-select: none;
+}
 
 .sidebar-footer {
   margin-top: auto;
