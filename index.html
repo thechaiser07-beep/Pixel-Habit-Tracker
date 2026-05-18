@@ -42,6 +42,10 @@
       <span>Graph</span>
     </div>
     <div class="nav-section-label" style="margin-top:18px">To-Do</div>
+    <div class="nav-item" onclick="nav('todo')">
+      <span class="nav-icon">☑</span>
+      <span>Tasks</span>
+    </div>
   </nav>
   <div class="sidebar-footer">
     Habit Tracker<br>
@@ -168,6 +172,44 @@
     </div>
   </div>
 
+  <!-- ── TO-DO PAGE ── -->
+  <div class="page" id="page-todo">
+    <div class="page-header">
+      <div class="page-title">Tasks</div>
+      <button class="btn btn-primary" onclick="openTodoModal()">+ Add task</button>
+    </div>
+    <div class="stats-row" id="todo-stats"></div>
+    <div class="todo-filter-bar">
+      <input  id="todo-search"          class="form-input" type="text"
+              placeholder="Search tasks…" oninput="renderTodo()"
+              style="flex:2;min-width:160px">
+      <select id="todo-filter-status"   class="form-input" onchange="renderTodo()"
+              style="flex:1;min-width:110px">
+        <option value="">All</option>
+        <option value="active">Active</option>
+        <option value="completed">Completed</option>
+      </select>
+      <select id="todo-filter-priority" class="form-input" onchange="renderTodo()"
+              style="flex:1;min-width:130px">
+        <option value="">Any priority</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <select id="todo-filter-tag"      class="form-input" onchange="renderTodo()"
+              style="flex:1;min-width:110px">
+        <option value="">Any tag</option>
+      </select>
+    </div>
+    <div id="todo-empty" class="empty" style="display:none">
+      <div class="empty-icon">☑</div>
+      <div class="empty-title">No tasks yet</div>
+      <p>Add your first task and start getting things done.</p>
+      <button class="btn btn-primary" onclick="openTodoModal()">Add task</button>
+    </div>
+    <div id="todo-list"></div>
+  </div>
+
 </div><!-- /main -->
 
 <!-- ══════════ HABIT MODAL ══════════ -->
@@ -234,6 +276,50 @@
     <div class="modal-footer">
       <button id="fc-submit" class="btn btn-primary" style="width:100%" onclick="addCategory()">
         Add category
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TODO MODAL ══════════ -->
+<div class="modal-backdrop" id="todo-modal-backdrop" onclick="todoBackdropClick(event)">
+  <div class="modal" style="max-height:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="todo-modal-title">Add task</div>
+      <button class="modal-close" onclick="closeTodoModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Task</label>
+        <input id="ft-text" class="form-input" type="text"
+               placeholder="What needs to be done?"
+               onkeydown="if(event.key==='Enter') saveTodo()">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Priority</label>
+          <select id="ft-priority" class="form-input">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Due date</label>
+          <input id="ft-due" class="form-input" type="date">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">
+          Tags
+          <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;margin-left:4px">(comma-separated)</span>
+        </label>
+        <input id="ft-tags" class="form-input" type="text" placeholder="e.g. work, personal">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="ft-submit" class="btn btn-primary" style="width:100%" onclick="saveTodo()">
+        Add task
       </button>
     </div>
   </div>

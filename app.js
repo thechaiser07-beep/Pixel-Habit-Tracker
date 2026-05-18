@@ -31,6 +31,8 @@ let habits         = [];
 let archivedHabits = [];
 let completions    = {}; // { habit_id: Set<date_string> }
 let categories     = [];
+let todos          = [];
+let subtasks       = [];
 let selColor       = PALETTE[0];
 let selCatColor    = PALETTE[0];
 let viewMonth      = new Date(); viewMonth.setDate(1);
@@ -38,6 +40,10 @@ let calYear        = new Date().getFullYear();
 let chart          = null;
 let chartRange     = 7;
 let busy           = false;
+let todoEditId     = null;
+let tdDragId       = null;
+let reorderTimer   = null;
+const openPanels   = new Set(); // tracks which subtask panels are expanded
 
 /* ════════════════════════════════
    LOADING / ERROR
@@ -58,22 +64,44 @@ function showError(msg) {
 /* ════════════════════════════════
    DATA — Supabase
 ════════════════════════════════ */
+function saveTodosToLS() {
+  try {
+    localStorage.setItem(`px_todos_${USER_ID}`,    JSON.stringify(todos));
+    localStorage.setItem(`px_subs_${USER_ID}`,     JSON.stringify(subtasks));
+  } catch {}
+}
+function loadTodosFromLS() {
+  try {
+    todos    = JSON.parse(localStorage.getItem(`px_todos_${USER_ID}`)    || '[]');
+    subtasks = JSON.parse(localStorage.getItem(`px_subs_${USER_ID}`)     || '[]');
+  } catch { todos = []; subtasks = []; }
+}
+
 async function loadData() {
+  loadTodosFromLS(); // instant paint from cache while Supabase loads
   showLoading(true);
   try {
     const [
       { data: hData,   error: hErr   },
       { data: cData,   error: cErr   },
-      { data: catData, error: catErr }
+      { data: catData, error: catErr },
+      { data: tData,   error: tErr   },
+      { data: sData,   error: sErr   }
     ] = await Promise.all([
       sb.from('habits').select('*').eq('user_id', USER_ID).order('created_at'),
       sb.from('completions').select('habit_id, date').eq('user_id', USER_ID),
-      sb.from('categories').select('*').eq('user_id', USER_ID).order('name')
+      sb.from('categories').select('*').eq('user_id', USER_ID).order('name'),
+      sb.from('todos').select('*').eq('user_id', USER_ID).order('order_index'),
+      sb.from('subtasks').select('*').eq('user_id', USER_ID).order('order_index')
     ]);
 
     if (hErr)   throw hErr;
     if (cErr)   throw cErr;
     if (catErr) throw catErr;
+    // Todos tables may not exist yet — non-fatal
+    if (!tErr) { todos    = tData || []; }
+    if (!sErr) { subtasks = sData || []; }
+    saveTodosToLS();
 
     const allHabits = hData || [];
     archivedHabits  = allHabits.filter(h => h.archived);
@@ -117,13 +145,14 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','calendar','categories','archive','graph'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph','todo'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
   if (id === 'graph')      renderGraph();
   if (id === 'archive')    renderArchive();
   if (id === 'calendar')   renderCalendar();
+  if (id === 'todo')       renderTodo();
 }
 
 /* ════════════════════════════════
@@ -210,7 +239,7 @@ function pickCatColor(c) {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { closeModal(); closeCatModal(); }
+  if (e.key === 'Escape') { closeModal(); closeCatModal(); closeTodoModal(); }
 });
 
 /* ════════════════════════════════
@@ -942,6 +971,450 @@ function renderCalendar() {
   </div></div>`;
 
   document.getElementById('cal-content').innerHTML = html;
+}
+
+/* ════════════════════════════════
+   TODO — MODAL
+════════════════════════════════ */
+function openTodoModal(id = null) {
+  todoEditId = id;
+  const isEdit = !!id;
+  document.getElementById('todo-modal-title').textContent = isEdit ? 'Edit task' : 'Add task';
+  document.getElementById('ft-submit').textContent        = isEdit ? 'Save changes' : 'Add task';
+
+  if (isEdit) {
+    const t = todos.find(t => t.id === id);
+    document.getElementById('ft-text').value     = t.text;
+    document.getElementById('ft-priority').value = t.priority;
+    document.getElementById('ft-due').value      = t.due_date || '';
+    document.getElementById('ft-tags').value     = (t.tags || []).join(', ');
+  } else {
+    document.getElementById('ft-text').value     = '';
+    document.getElementById('ft-priority').value = 'medium';
+    document.getElementById('ft-due').value      = '';
+    document.getElementById('ft-tags').value     = '';
+  }
+
+  document.getElementById('todo-modal-backdrop').classList.add('open');
+  setTimeout(() => document.getElementById('ft-text').focus(), 60);
+}
+
+function closeTodoModal() {
+  document.getElementById('todo-modal-backdrop').classList.remove('open');
+  todoEditId = null;
+}
+function todoBackdropClick(e) {
+  if (e.target === document.getElementById('todo-modal-backdrop')) closeTodoModal();
+}
+
+async function saveTodo() {
+  const text = document.getElementById('ft-text').value.trim();
+  if (!text) { toast('Please enter a task'); return; }
+
+  const priority = document.getElementById('ft-priority').value;
+  const due_date = document.getElementById('ft-due').value || null;
+  const tagsRaw  = document.getElementById('ft-tags').value;
+  const tags     = tagsRaw ? tagsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const btn = document.getElementById('ft-submit');
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  if (todoEditId) {
+    /* ── Edit ── */
+    const { error } = await sb.from('todos')
+      .update({ text, priority, due_date, tags })
+      .eq('id', todoEditId).eq('user_id', USER_ID);
+
+    if (error) { toast('Error saving task'); console.error(error); }
+    else {
+      Object.assign(todos.find(t => t.id === todoEditId), { text, priority, due_date, tags });
+      saveTodosToLS();
+      toast('Task updated');
+      closeTodoModal();
+      renderTodo();
+    }
+  } else {
+    /* ── Add ── */
+    const t = {
+      id:          Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+      user_id:     USER_ID,
+      text, priority, due_date, tags,
+      completed:   false,
+      order_index: todos.length,
+      created_at:  new Date().toISOString().slice(0,10)
+    };
+    const { error } = await sb.from('todos').insert(t);
+    if (error) { toast('Error adding task'); console.error(error); }
+    else {
+      todos.push(t);
+      saveTodosToLS();
+      toast(`Task added!`);
+      closeTodoModal();
+      renderTodo();
+    }
+  }
+
+  btn.textContent = todoEditId ? 'Save changes' : 'Add task';
+  btn.disabled = false;
+}
+
+/* ════════════════════════════════
+   TODO — CRUD
+════════════════════════════════ */
+async function toggleTodo(id) {
+  const t = todos.find(t => t.id === id);
+  if (!t) return;
+  const was = t.completed;
+  t.completed = !was;
+  saveTodosToLS();
+  renderTodo();
+
+  const { error } = await sb.from('todos')
+    .update({ completed: t.completed })
+    .eq('id', id).eq('user_id', USER_ID);
+
+  if (error) {
+    t.completed = was;
+    saveTodosToLS();
+    renderTodo();
+    toast('Sync error — try again');
+  }
+}
+
+async function deleteTodo(id) {
+  const prevTodos = [...todos];
+  const prevSubs  = [...subtasks];
+  todos    = todos.filter(t => t.id !== id);
+  subtasks = subtasks.filter(s => s.todo_id !== id);
+  openPanels.delete(id);
+  saveTodosToLS();
+  renderTodo();
+
+  const { error } = await sb.from('todos').delete().eq('id', id).eq('user_id', USER_ID);
+  if (error) {
+    todos    = prevTodos;
+    subtasks = prevSubs;
+    saveTodosToLS();
+    renderTodo();
+    toast('Error deleting task');
+  } else {
+    toast('Task deleted');
+  }
+}
+
+/* ── Inline edit ── */
+function startEditTodo(id, el) {
+  if (el.querySelector('input')) return;
+  const t = todos.find(t => t.id === id);
+  if (!t) return;
+
+  const inp = document.createElement('input');
+  inp.className = 'todo-inline-input';
+  inp.value     = t.text;
+  inp.onclick   = e => e.stopPropagation();
+  inp.onblur    = () => finishInlineEdit(id, inp.value, el, t.text);
+  inp.onkeydown = e => {
+    if (e.key === 'Enter')  { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { inp.onblur = null; el.textContent = t.text; }
+  };
+  el.textContent = '';
+  el.appendChild(inp);
+  inp.focus();
+  inp.select();
+}
+
+async function finishInlineEdit(id, newText, el, original) {
+  newText = newText.trim();
+  if (!newText || newText === original) { el.textContent = original; return; }
+  el.textContent = newText;
+  const t = todos.find(t => t.id === id);
+  if (t) t.text = newText;
+  saveTodosToLS();
+
+  const { error } = await sb.from('todos')
+    .update({ text: newText }).eq('id', id).eq('user_id', USER_ID);
+  if (error) { toast('Error saving'); if (t) t.text = original; saveTodosToLS(); }
+}
+
+/* ════════════════════════════════
+   SUBTASKS
+════════════════════════════════ */
+function getTodoSubtasks(todoId) {
+  return subtasks.filter(s => s.todo_id === todoId)
+                 .sort((a, b) => a.order_index - b.order_index);
+}
+
+function toggleSubtaskPanel(todoId) {
+  const el = document.getElementById(`subtasks-${todoId}`);
+  if (!el) return;
+  if (openPanels.has(todoId)) {
+    openPanels.delete(todoId);
+    el.style.display = 'none';
+  } else {
+    openPanels.add(todoId);
+    el.style.display = 'block';
+  }
+}
+
+async function addSubtask(todoId, inp) {
+  const text = inp.value.trim();
+  if (!text) return;
+  const s = {
+    id:          Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    user_id:     USER_ID,
+    todo_id:     todoId,
+    text,
+    completed:   false,
+    order_index: subtasks.filter(s => s.todo_id === todoId).length,
+    created_at:  new Date().toISOString().slice(0,10)
+  };
+  subtasks.push(s);
+  openPanels.add(todoId);
+  inp.value = '';
+  saveTodosToLS();
+  renderTodo();
+
+  const { error } = await sb.from('subtasks').insert(s);
+  if (error) {
+    subtasks = subtasks.filter(s2 => s2.id !== s.id);
+    saveTodosToLS();
+    renderTodo();
+    toast('Error adding subtask');
+  }
+}
+
+async function toggleSubtask(id) {
+  const s = subtasks.find(s => s.id === id);
+  if (!s) return;
+  const was = s.completed;
+  s.completed = !was;
+  openPanels.add(s.todo_id);
+  saveTodosToLS();
+  renderTodo();
+
+  const { error } = await sb.from('subtasks')
+    .update({ completed: s.completed }).eq('id', id).eq('user_id', USER_ID);
+  if (error) {
+    s.completed = was;
+    saveTodosToLS();
+    renderTodo();
+    toast('Sync error');
+  }
+}
+
+async function deleteSubtask(id, todoId) {
+  const prev = [...subtasks];
+  subtasks = subtasks.filter(s => s.id !== id);
+  openPanels.add(todoId);
+  saveTodosToLS();
+  renderTodo();
+
+  const { error } = await sb.from('subtasks').delete().eq('id', id).eq('user_id', USER_ID);
+  if (error) {
+    subtasks = prev;
+    saveTodosToLS();
+    renderTodo();
+    toast('Error deleting subtask');
+  }
+}
+
+/* ════════════════════════════════
+   DRAG & DROP
+════════════════════════════════ */
+function tdDragStart(e, id) {
+  tdDragId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => {
+    const el = document.getElementById('todo-' + id);
+    if (el) el.classList.add('td-dragging');
+  }, 0);
+}
+function tdDragOver(e, id) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (id === tdDragId) return;
+  document.querySelectorAll('.todo-card').forEach(c => c.classList.remove('td-drag-over'));
+  const el = document.getElementById('todo-' + id);
+  if (el) el.classList.add('td-drag-over');
+}
+function tdDragLeave(e, id) {
+  const el = document.getElementById('todo-' + id);
+  if (el) el.classList.remove('td-drag-over');
+}
+function tdDragEnd() {
+  document.querySelectorAll('.todo-card').forEach(c => {
+    c.classList.remove('td-dragging');
+    c.classList.remove('td-drag-over');
+  });
+  tdDragId = null;
+}
+function tdDrop(e, targetId) {
+  e.preventDefault();
+  if (!tdDragId || tdDragId === targetId) return;
+
+  const fromIdx = todos.findIndex(t => t.id === tdDragId);
+  const toIdx   = todos.findIndex(t => t.id === targetId);
+  if (fromIdx === -1 || toIdx === -1) return;
+
+  const [item] = todos.splice(fromIdx, 1);
+  todos.splice(toIdx, 0, item);
+  todos.forEach((t, i) => t.order_index = i);
+
+  saveTodosToLS();
+  renderTodo();
+
+  clearTimeout(reorderTimer);
+  reorderTimer = setTimeout(() => {
+    Promise.all(todos.map(t =>
+      sb.from('todos').update({ order_index: t.order_index })
+        .eq('id', t.id).eq('user_id', USER_ID)
+    ));
+  }, 600);
+}
+
+/* ════════════════════════════════
+   TODO — RENDER
+════════════════════════════════ */
+function fmtDate(str) {
+  if (!str) return '';
+  const [, m, d] = str.split('-');
+  return `${parseInt(d)}/${parseInt(m)}`;
+}
+
+function renderTodo() {
+  if (!document.getElementById('todo-stats')) return;
+
+  /* Stats */
+  const total     = todos.length;
+  const completed = todos.filter(t => t.completed).length;
+  const overdue   = todos.filter(t => !t.completed && t.due_date && t.due_date < todayKey()).length;
+  document.getElementById('todo-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total tasks</div>
+      <div class="stat-value purple">${total}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Completed</div>
+      <div class="stat-value green">${completed}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Overdue</div>
+      <div class="stat-value pink">${overdue}</div>
+    </div>`;
+
+  /* Gather filter values */
+  const search  = (document.getElementById('todo-search')?.value || '').toLowerCase();
+  const fStatus = document.getElementById('todo-filter-status')?.value  || '';
+  const fPrio   = document.getElementById('todo-filter-priority')?.value || '';
+  const fTag    = document.getElementById('todo-filter-tag')?.value     || '';
+
+  /* Rebuild tag dropdown */
+  const allTags = [...new Set(todos.flatMap(t => t.tags || []))].sort();
+  const tagEl   = document.getElementById('todo-filter-tag');
+  if (tagEl) tagEl.innerHTML =
+    '<option value="">Any tag</option>' +
+    allTags.map(tag => `<option value="${tag}"${tag === fTag ? ' selected' : ''}>${tag}</option>`).join('');
+
+  /* Filter */
+  const filtered = todos.filter(t => {
+    if (search && !t.text.toLowerCase().includes(search)) return false;
+    if (fStatus === 'active'    &&  t.completed)          return false;
+    if (fStatus === 'completed' && !t.completed)           return false;
+    if (fPrio && t.priority !== fPrio)                     return false;
+    if (fTag && !(t.tags || []).includes(fTag))            return false;
+    return true;
+  });
+
+  if (!filtered.length) {
+    document.getElementById('todo-empty').style.display = 'block';
+    document.getElementById('todo-list').style.display  = 'none';
+    return;
+  }
+  document.getElementById('todo-empty').style.display = 'none';
+  document.getElementById('todo-list').style.display  = 'block';
+
+  const today = todayKey();
+
+  document.getElementById('todo-list').innerHTML = filtered.map(t => {
+    const subs     = getTodoSubtasks(t.id);
+    const subsDone = subs.filter(s => s.completed).length;
+    const prioKey  = t.priority || 'medium';
+
+    /* Due date badge */
+    let dueBadge = '';
+    if (t.due_date) {
+      if (!t.completed && t.due_date < today)
+        dueBadge = `<span class="todo-due-badge overdue">⚠ ${fmtDate(t.due_date)}</span>`;
+      else if (!t.completed && t.due_date === today)
+        dueBadge = `<span class="todo-due-badge due-today">Today</span>`;
+      else
+        dueBadge = `<span class="todo-due-badge">${fmtDate(t.due_date)}</span>`;
+    }
+
+    /* Tags */
+    const tagChips = (t.tags || []).map(tag =>
+      `<span class="todo-tag">${tag}</span>`).join('');
+
+    /* Subtask badge */
+    const subsBadge = subs.length
+      ? `<span class="todo-subs-badge${subsDone === subs.length ? ' all-done' : ''}"
+              onclick="toggleSubtaskPanel('${t.id}')">☑ ${subsDone}/${subs.length}</span>`
+      : '';
+
+    /* Subtask panel HTML */
+    const subsHtml = [
+      ...subs.map(s => `
+        <div class="subtask-item${s.completed ? ' done' : ''}">
+          <button class="subtask-check${s.completed ? ' checked' : ''}"
+                  onclick="toggleSubtask('${s.id}')"></button>
+          <span class="subtask-text">${s.text}</span>
+          <button class="subtask-del" onclick="deleteSubtask('${s.id}','${t.id}')">×</button>
+        </div>`),
+      `<div class="subtask-add-row">
+         <input class="subtask-add-input" placeholder="Add subtask…"
+                onkeydown="if(event.key==='Enter') addSubtask('${t.id}',this)">
+       </div>`
+    ].join('');
+
+    return `
+    <div class="todo-card ${prioKey !== 'medium' ? 'prio-' + prioKey : 'prio-medium'}${t.completed ? ' td-done' : ''}"
+         id="todo-${t.id}"
+         draggable="true"
+         ondragstart="tdDragStart(event,'${t.id}')"
+         ondragover="tdDragOver(event,'${t.id}')"
+         ondragleave="tdDragLeave(event,'${t.id}')"
+         ondragend="tdDragEnd()"
+         ondrop="tdDrop(event,'${t.id}')">
+      <div class="todo-main">
+        <button class="todo-check${t.completed ? ' checked' : ''}"
+                onclick="toggleTodo('${t.id}')"></button>
+        <div class="todo-content">
+          <div class="todo-text${t.completed ? ' td-strikethrough' : ''}"
+               ondblclick="startEditTodo('${t.id}',this)"
+               title="Double-click to edit">${t.text}</div>
+          <div class="todo-meta">
+            <span class="todo-prio-badge prio-${prioKey}">${prioKey}</span>
+            ${tagChips}${dueBadge}${subsBadge}
+          </div>
+        </div>
+        <div class="todo-actions">
+          <button class="todo-action-btn" onclick="toggleSubtaskPanel('${t.id}')" title="Subtasks">☰</button>
+          <button class="todo-action-btn" onclick="openTodoModal('${t.id}')" title="Edit">✎</button>
+          <button class="todo-action-btn del" onclick="deleteTodo('${t.id}')" title="Delete">×</button>
+        </div>
+      </div>
+      <div class="subtask-panel" id="subtasks-${t.id}" style="display:none">
+        ${subsHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  /* Restore expanded subtask panels */
+  openPanels.forEach(id => {
+    const el = document.getElementById(`subtasks-${id}`);
+    if (el) el.style.display = 'block';
+  });
 }
 
 /* ════════════════════════════════
