@@ -497,6 +497,66 @@ select.form-input option { background: #1c2230; }
 }
 .toast.show { transform: translateY(0); opacity: 1; }
 
+/* ── Category cards ── */
+.cat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 14px;
+}
+.cat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.cat-card-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+.cat-card-count {
+  font-size: 11px;
+  color: var(--muted);
+}
+.cat-delete-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 4px;
+  transition: color 0.15s;
+  margin-left: 6px;
+}
+.cat-delete-btn:hover { color: #ef4444; }
+.cat-habit-list {
+  padding: 10px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cat-habit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.cat-habit-name {
+  flex: 1;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Mobile tweaks ── */
 @media (max-width: 600px) {
   .sidebar { width: 56px; }

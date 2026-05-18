@@ -24,6 +24,10 @@
       <span class="nav-icon">◫</span>
       <span>Pixel view</span>
     </div>
+    <div class="nav-item" onclick="nav('categories')">
+      <span class="nav-icon">⊞</span>
+      <span>Categories</span>
+    </div>
     <div class="nav-item" onclick="nav('graph')">
       <span class="nav-icon">╱</span>
       <span>Graph</span>
@@ -72,6 +76,25 @@
     </div>
   </div>
 
+  <!-- ── CATEGORIES PAGE ── -->
+  <div class="page" id="page-categories">
+    <div class="page-header">
+      <div class="page-title">Categories</div>
+      <button class="btn btn-primary" onclick="openCatModal()">+ Add category</button>
+    </div>
+
+    <div class="stats-row" id="cat-stats"></div>
+
+    <div id="cat-empty" class="empty" style="display:none">
+      <div class="empty-icon">⊞</div>
+      <div class="empty-title">No categories yet</div>
+      <p>Add your first category to start organising your habits.</p>
+      <button class="btn btn-primary" onclick="openCatModal()">Add category</button>
+    </div>
+
+    <div class="cat-grid" id="cat-grid"></div>
+  </div>
+
   <!-- ── GRAPH PAGE ── -->
   <div class="page" id="page-graph">
     <div class="page-header">
@@ -104,7 +127,7 @@
 
 </div><!-- /main -->
 
-<!-- ══════════ MODAL ══════════ -->
+<!-- ══════════ HABIT MODAL ══════════ -->
 <div class="modal-backdrop" id="modal-backdrop" onclick="backdropClick(event)">
   <div class="modal">
     <div class="modal-header">
@@ -121,11 +144,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
         <div class="form-group">
           <label class="form-label">Category</label>
-          <select id="f-cat" class="form-input">
-            <option>Health</option><option>Fitness</option><option>Learning</option>
-            <option>Mindfulness</option><option>Productivity</option>
-            <option>Social</option><option>Creative</option><option>Other</option>
-          </select>
+          <select id="f-cat" class="form-input"></select>
         </div>
         <div class="form-group">
           <label class="form-label">Frequency</label>
@@ -145,6 +164,33 @@
     <div class="modal-footer">
       <button class="btn btn-primary" style="width:100%" onclick="addHabit()">
         Add habit
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ CATEGORY MODAL ══════════ -->
+<div class="modal-backdrop" id="cat-modal-backdrop" onclick="catBackdropClick(event)">
+  <div class="modal" style="max-height:360px">
+    <div class="modal-header">
+      <div class="modal-title">Add category</div>
+      <button class="modal-close" onclick="closeCatModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Category name</label>
+        <input id="fc-name" class="form-input" type="text"
+               placeholder="e.g. Sleep, Finance, Sport…"
+               onkeydown="if(event.key==='Enter') addCategory()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Colour</label>
+        <div class="swatch-row" id="fc-colors"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="fc-submit" class="btn btn-primary" style="width:100%" onclick="addCategory()">
+        Add category
       </button>
     </div>
   </div>
