@@ -566,63 +566,93 @@ select.form-input option { background: #1c2230; }
   text-overflow: ellipsis;
 }
 
-/* ── Timeline ── */
-.tl-section { margin-bottom: 32px; }
-.tl-header {
+/* ── Gantt chart ── */
+.gantt-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 13px;
-}
-.tl-dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.tl-label {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
-.tl-count {
-  font-size: 11px;
-  color: var(--muted);
-}
-.tl-items {
-  border-left: 2px solid var(--border);
-  margin-left: 4px;
-  padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tl-item { position: relative; }
-.tl-item::before {
-  content: '';
-  position: absolute;
-  left: -24px; top: 15px;
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--dim);
-  border: 2px solid var(--bg);
-}
-.tl-item-inner {
-  display: flex;
-  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
+  margin-bottom: 18px;
 }
-.tl-item.tl-done .tl-item-inner { opacity: 0.45; }
-.tl-status-badge {
+.gantt-scroll { overflow-x: auto; padding-bottom: 10px; }
+.gantt-hdr-row {
+  display: flex;
+  align-items: center;
+}
+.gantt-date-cell {
+  text-align: center;
   font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  background: rgba(157,125,232,0.15);
-  color: var(--accent-light);
+  color: var(--dim);
+  flex-shrink: 0;
+  line-height: 2;
+  user-select: none;
+}
+.gantt-date-cell.gantt-today-hdr { color: var(--accent-light); font-weight: 700; }
+.gantt-date-cell.gantt-weekend   { opacity: 0.35; }
+.gantt-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+}
+.gantt-label-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-right: 12px;
+}
+.gantt-task-name {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+.gantt-track {
+  position: relative;
+  height: 28px;
+  flex-shrink: 0;
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0px,
+    transparent 31px,
+    rgba(255,255,255,0.04) 31px,
+    rgba(255,255,255,0.04) 32px
+  );
+}
+.gantt-today-line {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: rgba(255,255,255,0.18);
+  z-index: 1;
+  pointer-events: none;
+}
+.gantt-bar {
+  position: absolute;
+  top: 4px;
+  height: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
+  overflow: hidden;
+  opacity: 0.82;
+  transition: opacity 0.12s;
+  z-index: 2;
+}
+.gantt-bar:hover     { opacity: 1; }
+.gantt-bar-done      { opacity: 0.28 !important; }
+.gantt-bar-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  font-weight: 500;
 }
 
 /* ── Task Calendar ── */

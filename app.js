@@ -37,6 +37,8 @@ let selColor       = PALETTE[0];
 let selCatColor    = PALETTE[0];
 let viewMonth      = new Date(); viewMonth.setDate(1);
 let taskCalMonth   = new Date(); taskCalMonth.setDate(1);
+let ganttRange     = 30;
+let ganttOffset    = -3;
 let calYear        = new Date().getFullYear();
 let chart          = null;
 let chartRange     = 7;
@@ -1433,93 +1435,168 @@ function renderTodo() {
 }
 
 /* ════════════════════════════════
-   TIMELINE
+   GANTT CHART
 ════════════════════════════════ */
+function setGanttRange(n, btn) {
+  ganttRange = n;
+  document.getElementById('timeline-content')
+    .querySelectorAll('.range-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTimeline();
+}
+function shiftGantt(dir) {
+  ganttOffset += dir * Math.max(1, Math.floor(ganttRange / 3));
+  renderTimeline();
+}
+function fmtDateLong(str) {
+  if (!str) return '';
+  const [y, m, d] = str.split('-');
+  return `${parseInt(d)} ${MONTHS[parseInt(m)-1].slice(0,3)} ${y}`;
+}
+
 function renderTimeline() {
   if (!document.getElementById('timeline-content')) return;
 
-  const now = new Date(); now.setHours(0,0,0,0);
-  const today = todayKey();
-  const tom   = new Date(now); tom.setDate(tom.getDate() + 1);
-  const tomKey = dk(tom.getFullYear(), tom.getMonth(), tom.getDate());
-  const wkEnd  = new Date(now); wkEnd.setDate(wkEnd.getDate() + 7);
-  const wkKey  = dk(wkEnd.getFullYear(), wkEnd.getMonth(), wkEnd.getDate());
+  const CELL_W  = 32;
+  const LABEL_W = 164;
+  const PRIO_COLOR = { high: '#ef4444', medium: '#eab308', low: '#10b981' };
 
-  const GROUPS = [
-    { key: 'overdue',     label: 'Overdue',     color: '#ef4444', tasks: [] },
-    { key: 'today',       label: 'Today',       color: '#eab308', tasks: [] },
-    { key: 'tomorrow',    label: 'Tomorrow',    color: '#f97316', tasks: [] },
-    { key: 'week',        label: 'This Week',   color: '#9d7de8', tasks: [] },
-    { key: 'later',       label: 'Later',       color: '#10b981', tasks: [] },
-    { key: 'unscheduled', label: 'Unscheduled', color: '#8b949e', tasks: [] },
-    { key: 'done',        label: 'Done',        color: '#3d444d', tasks: [] },
-  ];
+  const todayDate = new Date(); todayDate.setHours(0,0,0,0);
+  const rangeStart = new Date(todayDate);
+  rangeStart.setDate(todayDate.getDate() + ganttOffset);
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeStart.getDate() + ganttRange - 1);
 
-  todos.forEach(t => {
-    if (t.completed || todoStatus(t) === 'done') {
-      GROUPS[6].tasks.push(t); return;
-    }
-    if (!t.due_date)             { GROUPS[5].tasks.push(t); return; }
-    if (t.due_date < today)        GROUPS[0].tasks.push(t);
-    else if (t.due_date === today) GROUPS[1].tasks.push(t);
-    else if (t.due_date === tomKey) GROUPS[2].tasks.push(t);
-    else if (t.due_date <= wkKey)  GROUPS[3].tasks.push(t);
-    else                           GROUPS[4].tasks.push(t);
-  });
+  const todayStr = todayKey();
+  const rsKey = dk(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate());
+  const reKey = dk(rangeEnd.getFullYear(),   rangeEnd.getMonth(),   rangeEnd.getDate());
 
-  GROUPS.forEach(g => g.tasks.sort((a, b) =>
-    (a.due_date || 'z').localeCompare(b.due_date || 'z')));
+  /* Build dates array */
+  const dates = [];
+  for (const d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1))
+    dates.push(new Date(d));
+  const numDays = dates.length;
+  const totalW  = numDays * CELL_W;
+  const todayCol = Math.round((todayDate - rangeStart) / 86400000);
 
-  const active = GROUPS.filter(g => g.tasks.length);
-  if (!active.length) {
-    document.getElementById('timeline-content').innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">╾</div>
-        <div class="empty-title">No tasks yet</div>
-        <p>Add tasks with due dates to see them on the timeline.</p>
-        <button class="btn btn-primary" onclick="openTodoModal()">Add task</button>
-      </div>`;
-    return;
+  function dayOff(str) {
+    return Math.round((new Date(str + 'T00:00:00') - rangeStart) / 86400000);
   }
 
-  document.getElementById('timeline-content').innerHTML = active.map(g => `
-    <div class="tl-section">
-      <div class="tl-header">
-        <div class="tl-dot" style="background:${g.color}"></div>
-        <span class="tl-label" style="color:${g.color}">${g.label}</span>
-        <span class="tl-count">${g.tasks.length} task${g.tasks.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div class="tl-items">
-        ${g.tasks.map(t => {
-          const prioKey  = t.priority || 'medium';
-          const tagChips = (t.tags || []).map(tag => `<span class="todo-tag">${tag}</span>`).join('');
-          const st       = todoStatus(t);
-          const inProg   = st === 'in_progress'
-            ? `<span class="tl-status-badge">In Progress</span>` : '';
-          return `
-          <div class="tl-item${t.completed ? ' tl-done' : ''}">
-            <div class="tl-item-inner">
-              <button class="todo-check${t.completed ? ' checked' : ''}"
-                      onclick="toggleTodo('${t.id}')"></button>
-              <div class="todo-content">
-                <div class="todo-text${t.completed ? ' td-strikethrough' : ''}"
-                     ondblclick="startEditTodo('${t.id}',this)">${t.text}</div>
-                <div class="todo-meta">
-                  <span class="todo-prio-badge prio-${prioKey}">${prioKey}</span>
-                  ${tagChips}
-                  ${t.due_date ? `<span class="todo-due-badge">${fmtDate(t.due_date)}</span>` : ''}
-                  ${inProg}
-                </div>
-              </div>
-              <div class="todo-actions">
-                <button class="todo-action-btn" onclick="openTodoModal('${t.id}')" title="Edit">✎</button>
-                <button class="todo-action-btn del" onclick="deleteTodo('${t.id}')" title="Delete">×</button>
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`).join('');
+  /* Tasks with due dates, sorted by start */
+  const scheduled = todos
+    .filter(t => t.due_date)
+    .sort((a, b) => (a.created_at || a.due_date).localeCompare(b.created_at || b.due_date));
+  const unscheduled = todos.filter(t => !t.due_date);
+
+  /* Month label row data */
+  let lastMo = -1;
+  const moLabels = dates.map(d => {
+    if (d.getMonth() !== lastMo) { lastMo = d.getMonth(); return MONTHS[d.getMonth()].slice(0,3); }
+    return '';
+  });
+
+  let html = `
+  <div class="gantt-controls">
+    <div class="range-row" style="margin-bottom:0">
+      <button class="range-btn${ganttRange===14?' active':''}" onclick="setGanttRange(14,this)">14d</button>
+      <button class="range-btn${ganttRange===30?' active':''}" onclick="setGanttRange(30,this)">30d</button>
+      <button class="range-btn${ganttRange===60?' active':''}" onclick="setGanttRange(60,this)">60d</button>
+      <button class="range-btn${ganttRange===90?' active':''}" onclick="setGanttRange(90,this)">90d</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <button class="month-btn" onclick="shiftGantt(-1)">‹</button>
+      <span style="font-size:11px;color:var(--muted);min-width:170px;text-align:center">
+        ${fmtDateLong(rsKey)} – ${fmtDateLong(reKey)}
+      </span>
+      <button class="month-btn" onclick="shiftGantt(1)">›</button>
+    </div>
+  </div>
+  <div class="gantt-scroll">
+    <div style="min-width:${LABEL_W + totalW}px">`;
+
+  /* Month row */
+  html += `<div class="gantt-hdr-row" style="padding-left:${LABEL_W}px">`;
+  moLabels.forEach(lbl => {
+    html += `<div class="gantt-date-cell" style="width:${CELL_W}px;font-size:9px;color:var(--accent-light);font-weight:700;line-height:1.6">${lbl}</div>`;
+  });
+  html += `</div>`;
+
+  /* Day number row */
+  html += `<div class="gantt-hdr-row" style="padding-left:${LABEL_W}px;margin-bottom:6px">`;
+  dates.forEach(d => {
+    const key = dk(d.getFullYear(), d.getMonth(), d.getDate());
+    const isT  = key === todayStr;
+    const isWe = d.getDay() === 0 || d.getDay() === 6;
+    html += `<div class="gantt-date-cell${isT?' gantt-today-hdr':''}${isWe?' gantt-weekend':''}" style="width:${CELL_W}px">${d.getDate()}</div>`;
+  });
+  html += `</div>`;
+
+  /* Task rows */
+  const todayLine = todayCol >= 0 && todayCol < numDays
+    ? `<div class="gantt-today-line" style="left:${todayCol * CELL_W + CELL_W/2}px"></div>` : '';
+
+  if (!scheduled.length) {
+    html += `<div style="padding:32px 0;text-align:center;color:var(--muted);font-size:13px">
+      No tasks with due dates in this range.
+      <button class="btn" style="margin-left:10px;font-size:12px;padding:4px 12px" onclick="shiftGantt(-1)">← Earlier</button>
+    </div>`;
+  } else {
+    scheduled.forEach(t => {
+      const color     = PRIO_COLOR[t.priority] || PRIO_COLOR.medium;
+      const isDone    = t.completed || todoStatus(t) === 'done';
+      const startStr  = t.created_at || todayStr;
+      const endStr    = t.due_date;
+      const rawStart  = dayOff(startStr);
+      const rawEnd    = dayOff(endStr);
+
+      /* Skip if entirely outside view */
+      if (rawEnd < 0 || rawStart >= numDays) return;
+
+      const cs = Math.max(0,          rawStart);
+      const ce = Math.min(numDays - 1, rawEnd);
+      const barLeft  = cs * CELL_W;
+      const barWidth = Math.max(CELL_W, (ce - cs + 1) * CELL_W);
+      const clipL = rawStart < 0;
+      const clipR = rawEnd >= numDays;
+      const rTL = clipL ? 0 : 5, rTR = clipR ? 0 : 5;
+
+      html += `
+      <div class="gantt-row">
+        <div class="gantt-label-col" style="width:${LABEL_W}px">
+          <div class="habit-dot" style="background:${color};width:8px;height:8px;flex-shrink:0"></div>
+          <span class="gantt-task-name${isDone?' td-strikethrough':''}" title="${t.text}">${t.text}</span>
+        </div>
+        <div class="gantt-track" style="width:${totalW}px;background-size:${CELL_W}px 100%">
+          ${todayLine}
+          <div class="gantt-bar${isDone?' gantt-bar-done':''}"
+               style="left:${barLeft}px;width:${barWidth}px;background:${color};
+                      border-radius:${rTL}px ${rTR}px ${rTR}px ${rTL}px"
+               onclick="openTodoModal('${t.id}')"
+               title="${t.text}&#10;${fmtDateLong(startStr)} → ${fmtDateLong(endStr)}">
+            <span class="gantt-bar-label">${clipL?'◄ ':''}${t.text}${clipR?' ►':''}</span>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
+
+  html += `</div></div>`;
+
+  /* Unscheduled tasks */
+  if (unscheduled.length) {
+    html += `<div class="section-label" style="margin-top:26px">Unscheduled</div>
+    <div style="display:flex;flex-direction:column;gap:7px">
+    ${unscheduled.map(t => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--card);border:1px solid var(--border);border-radius:8px;font-size:13px">
+        <div class="habit-dot" style="background:${PRIO_COLOR[t.priority]||PRIO_COLOR.medium};width:8px;height:8px;flex-shrink:0"></div>
+        <span style="flex:1;color:var(--muted)">${t.text}</span>
+        <button class="todo-action-btn" onclick="openTodoModal('${t.id}')" title="Add due date">✎</button>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  document.getElementById('timeline-content').innerHTML = html;
 }
 
 /* ════════════════════════════════
