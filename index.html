@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel — Habit Tracker</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════ LOADING ══════════ -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-label">Loading your habits…</div>
+</div>
+
+<!-- ══════════ SIDEBAR ══════════ -->
+<div class="sidebar">
+  <div class="brand">Pixel<em>.</em></div>
+  <nav>
+    <div class="nav-item active" onclick="nav('pixel')">
+      <span class="nav-icon">◫</span>
+      <span>Pixel view</span>
+    </div>
+    <div class="nav-item" onclick="nav('graph')">
+      <span class="nav-icon">╱</span>
+      <span>Graph</span>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    Habit Tracker<br>
+    Synced via Supabase
+  </div>
+</div>
+
+<!-- ══════════ MAIN ══════════ -->
+<div class="main">
+
+  <!-- ── PIXEL PAGE ── -->
+  <div class="page active" id="page-pixel">
+    <div class="page-header">
+      <div class="page-title">Pixel view</div>
+      <button class="btn btn-primary" onclick="openModal()">+ Add habit</button>
+    </div>
+
+    <div class="error-banner" id="px-error">
+      <span>⚠</span><span id="px-error-msg"></span>
+    </div>
+
+    <div class="stats-row" id="px-stats"></div>
+
+    <div class="month-nav">
+      <button class="month-btn" onclick="shiftMonth(-1)">‹</button>
+      <span class="month-name" id="px-month"></span>
+      <button class="month-btn" onclick="shiftMonth(1)">›</button>
+    </div>
+
+    <div id="px-empty" class="empty" style="display:none">
+      <div class="empty-icon">◫</div>
+      <div class="empty-title">No habits yet</div>
+      <p>Add your first habit to start filling in your pixel grid.</p>
+      <button class="btn btn-primary" onclick="openModal()">Add first habit</button>
+    </div>
+
+    <div id="px-grid-wrap">
+      <div class="card pixel-scroll">
+        <div class="grid-wrap" id="px-grid"></div>
+      </div>
+      <div class="streak-table" id="px-streaks"></div>
+    </div>
+  </div>
+
+  <!-- ── GRAPH PAGE ── -->
+  <div class="page" id="page-graph">
+    <div class="page-header">
+      <div class="page-title">Habit graph</div>
+      <button class="btn btn-primary" onclick="openModal()">+ Add habit</button>
+    </div>
+
+    <div id="gr-empty" class="empty" style="display:none">
+      <div class="empty-icon">╱</div>
+      <div class="empty-title">No data yet</div>
+      <p>Add habits and mark completions to see your progress lines.</p>
+      <button class="btn btn-primary" onclick="openModal()">Add habit</button>
+    </div>
+
+    <div id="gr-content">
+      <div class="range-row">
+        <button class="range-btn active" onclick="setRange(7,this)">7 days</button>
+        <button class="range-btn" onclick="setRange(14,this)">14 days</button>
+        <button class="range-btn" onclick="setRange(30,this)">30 days</button>
+        <button class="range-btn" onclick="setRange(90,this)">90 days</button>
+      </div>
+      <div class="chart-card">
+        <canvas id="gr-canvas"></canvas>
+        <div class="legend-row" id="gr-legend"></div>
+      </div>
+      <div class="section-label" style="margin-top:26px">Habit stats</div>
+      <div class="hstat-grid" id="gr-stats"></div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ══════════ MODAL ══════════ -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="backdropClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add habit</div>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Habit name</label>
+        <input id="f-name" class="form-input" type="text"
+               placeholder="e.g. Morning run, Read 30 min…"
+               onkeydown="if(event.key==='Enter') addHabit()">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select id="f-cat" class="form-input">
+            <option>Health</option><option>Fitness</option><option>Learning</option>
+            <option>Mindfulness</option><option>Productivity</option>
+            <option>Social</option><option>Creative</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Frequency</label>
+          <select id="f-freq" class="form-input">
+            <option>Daily</option><option>Weekdays</option>
+            <option>Weekends</option><option>Weekly</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Colour</label>
+        <div class="swatch-row" id="f-colors"></div>
+      </div>
+      <div class="section-label">Your habits</div>
+      <div id="modal-habits-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" style="width:100%" onclick="addHabit()">
+        Add habit
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
