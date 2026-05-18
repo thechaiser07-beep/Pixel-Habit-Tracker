@@ -110,11 +110,16 @@
     </div>
 
     <div id="gr-content">
-      <div class="range-row">
-        <button class="range-btn active" onclick="setRange(7,this)">7 days</button>
-        <button class="range-btn" onclick="setRange(14,this)">14 days</button>
-        <button class="range-btn" onclick="setRange(30,this)">30 days</button>
-        <button class="range-btn" onclick="setRange(90,this)">90 days</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+        <div class="range-row" style="margin-bottom:0">
+          <button class="range-btn active" onclick="setRange(7,this)">7 days</button>
+          <button class="range-btn" onclick="setRange(14,this)">14 days</button>
+          <button class="range-btn" onclick="setRange(30,this)">30 days</button>
+          <button class="range-btn" onclick="setRange(90,this)">90 days</button>
+        </div>
+        <select id="gr-cat-filter" class="form-input" style="width:auto;padding:5px 32px 5px 12px;font-size:12px" onchange="renderGraph()">
+          <option value="">All categories</option>
+        </select>
       </div>
       <div class="chart-card">
         <canvas id="gr-canvas"></canvas>

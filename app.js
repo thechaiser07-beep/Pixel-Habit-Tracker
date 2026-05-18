@@ -580,8 +580,17 @@ function renderGraph() {
   document.getElementById('gr-empty').style.display   = 'none';
   document.getElementById('gr-content').style.display = 'block';
 
+  /* Populate category dropdown */
+  const filterEl  = document.getElementById('gr-cat-filter');
+  const selCat    = filterEl.value;
+  filterEl.innerHTML = '<option value="">All categories</option>' +
+    categories.map(c => `<option value="${c.name}"${c.name === selCat ? ' selected' : ''}>${c.name}</option>`).join('');
+
+  /* Filter habits by selected category */
+  const filtered = selCat ? habits.filter(h => h.category === selCat) : habits;
+
   const now   = new Date(); now.setHours(0,0,0,0);
-  const total = habits.length;
+  const total = filtered.length;
   const dates  = [];
   const labels = [];
   const rawPct = []; // daily (done / total) * 100
@@ -591,7 +600,7 @@ function renderGraph() {
     const key = dk(d.getFullYear(), d.getMonth(), d.getDate());
     dates.push(key);
 
-    const done = habits.filter(h => getSet(h.id).has(key)).length;
+    const done = filtered.filter(h => getSet(h.id).has(key)).length;
     rawPct.push(Math.round(done / total * 100));
 
     const show = chartRange <= 14 ? true
@@ -645,8 +654,8 @@ function renderGraph() {
           padding:         12,
           callbacks: {
             label: ctx => {
-              const idx   = ctx.dataIndex;
-              const done  = habits.filter(h => getSet(h.id).has(dates[idx])).length;
+              const idx  = ctx.dataIndex;
+              const done = filtered.filter(h => getSet(h.id).has(dates[idx])).length;
               return ` ${done} / ${total} habits  (${rawPct[idx]}%)`;
             }
           }
@@ -676,11 +685,11 @@ function renderGraph() {
   document.getElementById('gr-legend').innerHTML = `
     <div class="legend-item">
       <div class="legend-dot" style="background:#9d7de8"></div>
-      Daily completion (${total} habit${total !== 1 ? 's' : ''})
+      Daily completion (${total} habit${total !== 1 ? 's' : ''}${selCat ? ` · ${selCat}` : ''})
     </div>`;
 
   /* Per-habit breakdown cards */
-  document.getElementById('gr-stats').innerHTML = habits.map(h => {
+  document.getElementById('gr-stats').innerHTML = filtered.map(h => {
     const s   = streak(h.id);
     const r   = rate30(h.id);
     const tot = getSet(h.id).size;
