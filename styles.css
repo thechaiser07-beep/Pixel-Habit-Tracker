@@ -196,7 +196,7 @@ body {
   margin: 0 2px;
 }
 .pixel {
-  width: 20px; height: 20px;
+  width: 24px; height: 24px;
   border-radius: 4px;
   background: rgba(255,255,255,0.05);
   margin: 0 2px;
