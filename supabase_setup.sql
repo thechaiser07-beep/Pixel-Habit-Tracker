@@ -71,6 +71,10 @@ create policy "anon_all_categories"
   with check (true);
 
 
+-- 3c. ARCHIVE FLAG on habits
+alter table public.habits add column if not exists archived boolean not null default false;
+
+
 -- 4. INDEXES for fast per-user queries
 create index if not exists habits_user_id_idx       on public.habits(user_id);
 create index if not exists completions_user_id_idx  on public.completions(user_id);

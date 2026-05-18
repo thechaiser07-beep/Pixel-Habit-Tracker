@@ -24,9 +24,17 @@
       <span class="nav-icon">◫</span>
       <span>Pixel view</span>
     </div>
+    <div class="nav-item" onclick="nav('calendar')">
+      <span class="nav-icon">▦</span>
+      <span>Calendar</span>
+    </div>
     <div class="nav-item" onclick="nav('categories')">
       <span class="nav-icon">⊞</span>
       <span>Categories</span>
+    </div>
+    <div class="nav-item" onclick="nav('archive')">
+      <span class="nav-icon">⊡</span>
+      <span>Archive</span>
     </div>
     <div class="nav-item" onclick="nav('graph')">
       <span class="nav-icon">╱</span>
@@ -76,6 +84,20 @@
     </div>
   </div>
 
+  <!-- ── CALENDAR PAGE ── -->
+  <div class="page" id="page-calendar">
+    <div class="page-header">
+      <div class="page-title">Calendar</div>
+      <div class="month-nav" style="margin-bottom:0">
+        <button class="month-btn" onclick="shiftYear(-1)">‹</button>
+        <span class="month-name" id="cal-year">2026</span>
+        <button class="month-btn" onclick="shiftYear(1)">›</button>
+      </div>
+    </div>
+    <div class="stats-row" id="cal-stats"></div>
+    <div id="cal-content"></div>
+  </div>
+
   <!-- ── CATEGORIES PAGE ── -->
   <div class="page" id="page-categories">
     <div class="page-header">
@@ -93,6 +115,20 @@
     </div>
 
     <div class="cat-grid" id="cat-grid"></div>
+  </div>
+
+  <!-- ── ARCHIVE PAGE ── -->
+  <div class="page" id="page-archive">
+    <div class="page-header">
+      <div class="page-title">Archive</div>
+    </div>
+    <div class="stats-row" id="arch-stats"></div>
+    <div id="arch-empty" class="empty" style="display:none">
+      <div class="empty-icon">⊡</div>
+      <div class="empty-title">Nothing archived yet</div>
+      <p>Archive habits to hide them from the pixel view while keeping all their history.</p>
+    </div>
+    <div class="arch-list" id="arch-list" style="display:none"></div>
   </div>
 
   <!-- ── GRAPH PAGE ── -->

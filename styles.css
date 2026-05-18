@@ -557,6 +557,116 @@ select.form-input option { background: #1c2230; }
   text-overflow: ellipsis;
 }
 
+/* ── Archive page ── */
+.arch-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.arch-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.arch-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.arch-name {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.arch-meta {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.arch-nums {
+  display: flex;
+  gap: 24px;
+}
+.arch-del-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #ef4444;
+  border-color: rgba(239,68,68,0.3);
+}
+.arch-del-btn:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
+.arch-btn-sm {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: color 0.15s, border-color 0.15s;
+}
+.arch-btn-sm:hover { color: var(--accent-light); border-color: var(--accent-light); }
+
+/* ── Calendar page ── */
+.cal-wrap { overflow-x: auto; }
+.cal-grid {
+  min-width: max-content;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-month-row,
+.cal-day-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.cal-row-lbl {
+  width: 14px;
+  font-size: 9px;
+  color: var(--dim);
+  text-align: right;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+.cal-month-cell {
+  width: 14px;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+  overflow: visible;
+}
+.cal-cell {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+.cal-cell:hover { opacity: 0.75; }
+.cal-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.cal-lgnd-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+
 /* ── Mobile tweaks ── */
 @media (max-width: 600px) {
   .sidebar { width: 56px; }

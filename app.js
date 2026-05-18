@@ -27,15 +27,17 @@ const DEFAULT_CATEGORIES = [
   { name: 'Other',         color: '#8b949e' },
 ];
 
-let habits      = [];
-let completions = {}; // { habit_id: Set<date_string> }
-let categories  = [];
-let selColor    = PALETTE[0];
-let selCatColor = PALETTE[0];
-let viewMonth   = new Date(); viewMonth.setDate(1);
-let chart       = null;
-let chartRange  = 7;
-let busy        = false;
+let habits         = [];
+let archivedHabits = [];
+let completions    = {}; // { habit_id: Set<date_string> }
+let categories     = [];
+let selColor       = PALETTE[0];
+let selCatColor    = PALETTE[0];
+let viewMonth      = new Date(); viewMonth.setDate(1);
+let calYear        = new Date().getFullYear();
+let chart          = null;
+let chartRange     = 7;
+let busy           = false;
 
 /* ════════════════════════════════
    LOADING / ERROR
@@ -73,7 +75,9 @@ async function loadData() {
     if (cErr)   throw cErr;
     if (catErr) throw catErr;
 
-    habits = hData || [];
+    const allHabits = hData || [];
+    archivedHabits  = allHabits.filter(h => h.archived);
+    habits          = allHabits.filter(h => !h.archived);
     completions = {};
     (cData || []).forEach(c => {
       if (!completions[c.habit_id]) completions[c.habit_id] = new Set();
@@ -113,11 +117,13 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','categories','graph'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
   if (id === 'graph')      renderGraph();
+  if (id === 'archive')    renderArchive();
+  if (id === 'calendar')   renderCalendar();
 }
 
 /* ════════════════════════════════
@@ -160,6 +166,7 @@ function renderModalContents() {
       <div class="habit-dot" style="background:${h.color}"></div>
       <div class="habit-item-name">${h.name}</div>
       <div class="habit-item-meta">${h.category} · ${h.frequency}</div>
+      <button class="arch-btn-sm" onclick="archiveHabit('${h.id}')" title="Archive">⊡</button>
       <button class="del-btn" onclick="delHabit('${h.id}')" title="Remove">×</button>
     </div>`).join('');
 }
@@ -491,7 +498,7 @@ async function addCategory() {
 async function delCategory(id) {
   const cat = categories.find(c => c.id === id);
   if (!cat) return;
-  if (habits.find(h => h.category === cat.name)) {
+  if (habits.find(h => h.category === cat.name) || archivedHabits.find(h => h.category === cat.name)) {
     toast('Move or delete all habits in this category first');
     return;
   }
@@ -718,6 +725,223 @@ function renderGraph() {
       </div>
     </div>`;
   }).join('');
+}
+
+/* ════════════════════════════════
+   ARCHIVE PAGE
+════════════════════════════════ */
+async function archiveHabit(id) {
+  const h = habits.find(h => h.id === id);
+  if (!h) return;
+  const { error } = await sb.from('habits').update({ archived: true }).eq('id', id).eq('user_id', USER_ID);
+  if (error) { toast('Error archiving habit'); console.error(error); return; }
+  habits = habits.filter(h => h.id !== id);
+  h.archived = true;
+  archivedHabits.push(h);
+  toast(`"${h.name}" archived`);
+  renderModalContents();
+  renderPixel();
+}
+
+async function unarchiveHabit(id) {
+  const h = archivedHabits.find(h => h.id === id);
+  if (!h) return;
+  const { error } = await sb.from('habits').update({ archived: false }).eq('id', id).eq('user_id', USER_ID);
+  if (error) { toast('Error restoring habit'); console.error(error); return; }
+  archivedHabits = archivedHabits.filter(h => h.id !== id);
+  h.archived = false;
+  habits.push(h);
+  toast(`"${h.name}" restored`);
+  renderArchive();
+}
+
+async function delArchivedHabit(id) {
+  const h = archivedHabits.find(h => h.id === id);
+  if (!h) return;
+  if (!confirm(`Permanently delete "${h.name}" and all its history?`)) return;
+  const { error } = await sb.from('habits').delete().eq('id', id).eq('user_id', USER_ID);
+  if (error) { toast('Error deleting habit'); console.error(error); return; }
+  archivedHabits = archivedHabits.filter(h => h.id !== id);
+  delete completions[id];
+  toast(`"${h.name}" deleted permanently`);
+  renderArchive();
+}
+
+function renderArchive() {
+  const totalComp = archivedHabits.reduce((s, h) => s + getSet(h.id).size, 0);
+  document.getElementById('arch-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Archived habits</div>
+      <div class="stat-value purple">${archivedHabits.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Preserved completions</div>
+      <div class="stat-value pink">${totalComp}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active habits</div>
+      <div class="stat-value green">${habits.length}</div>
+    </div>`;
+
+  if (!archivedHabits.length) {
+    document.getElementById('arch-empty').style.display = 'block';
+    document.getElementById('arch-list').style.display  = 'none';
+    return;
+  }
+  document.getElementById('arch-empty').style.display = 'none';
+  document.getElementById('arch-list').style.display  = 'grid';
+
+  document.getElementById('arch-list').innerHTML = archivedHabits.map(h => {
+    const tot = getSet(h.id).size;
+    const s   = streak(h.id);
+    const r   = rate30(h.id);
+    return `<div class="arch-card">
+      <div class="arch-card-header">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0">
+          <div class="habit-dot" style="background:${h.color};width:11px;height:11px;flex-shrink:0"></div>
+          <span class="arch-name">${h.name}</span>
+          <span class="arch-meta">${h.category} · ${h.frequency}</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn" style="padding:5px 12px;font-size:12px" onclick="unarchiveHabit('${h.id}')">Restore</button>
+          <button class="btn arch-del-btn" onclick="delArchivedHabit('${h.id}')">Delete</button>
+        </div>
+      </div>
+      <div class="arch-nums">
+        <div class="hstat-num">
+          <div class="hstat-val" style="color:var(--green)">${tot}</div>
+          <div class="hstat-lbl">all time</div>
+        </div>
+        <div class="hstat-num">
+          <div class="hstat-val" style="color:var(--accent-light)">${s}</div>
+          <div class="hstat-lbl">streak</div>
+        </div>
+        <div class="hstat-num">
+          <div class="hstat-val" style="color:var(--pink)">${r}%</div>
+          <div class="hstat-lbl">30-day rate</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ════════════════════════════════
+   CALENDAR PAGE
+════════════════════════════════ */
+function heatColor(pct) {
+  if (pct <= 50) {
+    const t = pct / 50;
+    return `rgb(${Math.round(239+(234-239)*t)},${Math.round(68+(179-68)*t)},${Math.round(68+(8-68)*t)})`;
+  }
+  const t = (pct - 50) / 50;
+  return `rgb(${Math.round(234+(16-234)*t)},${Math.round(179+(185-179)*t)},${Math.round(8+(129-8)*t)})`;
+}
+
+function shiftYear(dir) {
+  calYear += dir;
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const yr    = calYear;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const allH  = [...habits, ...archivedHabits];
+
+  document.getElementById('cal-year').textContent = yr;
+
+  /* Build week grid (Sun→Sat columns) */
+  const jan1    = new Date(yr, 0, 1);
+  const startDay = new Date(jan1); startDay.setDate(startDay.getDate() - startDay.getDay());
+  const dec31   = new Date(yr, 11, 31);
+  const endDay  = new Date(dec31); endDay.setDate(endDay.getDate() + (6 - endDay.getDay()));
+
+  const weeks = [];
+  const cur   = new Date(startDay);
+  while (cur <= endDay) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      const day     = new Date(cur);
+      const inYear  = day.getFullYear() === yr;
+      const isFut   = day > today;
+      const key     = dk(day.getFullYear(), day.getMonth(), day.getDate());
+      let pct = null;
+      if (inYear && !isFut && allH.length > 0) {
+        const done = allH.filter(h => getSet(h.id).has(key)).length;
+        pct = Math.round(done / allH.length * 100);
+      }
+      week.push({ day, key, inYear, isFut, pct });
+      cur.setDate(cur.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  /* Stats */
+  let activeDays = 0, totalComp = 0, bestPct = 0;
+  weeks.flat().forEach(c => {
+    if (!c.inYear || c.isFut || c.pct === null) return;
+    totalComp += allH.filter(h => getSet(h.id).has(c.key)).length;
+    if (c.pct > 0)    activeDays++;
+    if (c.pct > bestPct) bestPct = c.pct;
+  });
+
+  document.getElementById('cal-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Active days</div>
+      <div class="stat-value purple">${activeDays}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total completions</div>
+      <div class="stat-value pink">${totalComp}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Best day</div>
+      <div class="stat-value green">${bestPct}%</div>
+    </div>`;
+
+  /* Month labels */
+  const monthLabels = weeks.map(week => {
+    const first = week.find(c => c.inYear && c.day.getDate() === 1);
+    return first ? MONTHS[first.day.getMonth()].slice(0, 3) : '';
+  });
+
+  const DOW = ['S','M','T','W','T','F','S'];
+
+  let html = `<div class="cal-wrap"><div class="cal-grid">`;
+
+  /* Month header */
+  html += `<div class="cal-month-row"><div class="cal-row-lbl"></div>`;
+  weeks.forEach((_, wi) => {
+    html += `<div class="cal-month-cell">${monthLabels[wi]}</div>`;
+  });
+  html += `</div>`;
+
+  /* Day rows */
+  for (let dow = 0; dow < 7; dow++) {
+    html += `<div class="cal-day-row"><div class="cal-row-lbl">${DOW[dow]}</div>`;
+    weeks.forEach(week => {
+      const c = week[dow];
+      let bg;
+      if (!c.inYear)              bg = 'transparent';
+      else if (c.isFut || c.pct === null) bg = 'rgba(255,255,255,0.04)';
+      else                        bg = heatColor(c.pct);
+      const tip = c.inYear && !c.isFut && c.pct !== null ? `${c.key} · ${c.pct}%` : c.inYear ? c.key : '';
+      html += `<div class="cal-cell" style="background:${bg}" title="${tip}"></div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+
+  /* Legend */
+  html += `<div class="cal-legend">
+    <span>Less</span>
+    ${[0,25,50,75,100].map(p =>
+      `<div class="cal-lgnd-cell" style="background:${p===0?'rgba(255,255,255,0.04)':heatColor(p)}"></div>`
+    ).join('')}
+    <span>More</span>
+  </div></div>`;
+
+  document.getElementById('cal-content').innerHTML = html;
 }
 
 /* ════════════════════════════════
