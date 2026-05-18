@@ -145,7 +145,7 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','calendar','categories','archive','graph','todo'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph','todo','daily'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
@@ -153,6 +153,7 @@ function nav(id) {
   if (id === 'archive')    renderArchive();
   if (id === 'calendar')   renderCalendar();
   if (id === 'todo')       renderTodo();
+  if (id === 'daily')      renderDaily();
 }
 
 /* ════════════════════════════════
@@ -1065,6 +1066,11 @@ async function saveTodo() {
 async function toggleTodo(id) {
   const t = todos.find(t => t.id === id);
   if (!t) return;
+  /* Daily tasks delete on completion wherever they're toggled */
+  if (!t.completed && (t.tags || []).includes('daily')) {
+    await completeDailyTodo(id);
+    return;
+  }
   const was = t.completed;
   t.completed = !was;
   saveTodosToLS();
@@ -1415,6 +1421,112 @@ function renderTodo() {
     const el = document.getElementById(`subtasks-${id}`);
     if (el) el.style.display = 'block';
   });
+}
+
+/* ════════════════════════════════
+   DAILY PAGE
+════════════════════════════════ */
+async function addDailyTodo() {
+  const inp  = document.getElementById('daily-input');
+  const text = inp.value.trim();
+  if (!text) { toast('Enter a task'); return; }
+
+  const t = {
+    id:          Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+    user_id:     USER_ID,
+    text,
+    completed:   false,
+    priority:    'high',
+    tags:        ['daily'],
+    due_date:    todayKey(),
+    order_index: todos.length,
+    created_at:  new Date().toISOString().slice(0,10)
+  };
+
+  inp.value = '';
+  todos.push(t);
+  saveTodosToLS();
+  renderDaily();
+
+  const { error } = await sb.from('todos').insert(t);
+  if (error) {
+    todos = todos.filter(t2 => t2.id !== t.id);
+    saveTodosToLS();
+    renderDaily();
+    toast('Error adding task');
+    console.error(error);
+  }
+}
+
+async function completeDailyTodo(id) {
+  /* Animate out, then delete */
+  const card = document.getElementById('daily-card-' + id);
+  if (card) {
+    card.classList.add('completing');
+    await new Promise(r => setTimeout(r, 240));
+  }
+
+  const prev = [...todos];
+  todos = todos.filter(t => t.id !== id);
+  openPanels.delete(id);
+  saveTodosToLS();
+  renderDaily();
+  if (document.getElementById('page-todo').classList.contains('active')) renderTodo();
+
+  const { error } = await sb.from('todos').delete().eq('id', id).eq('user_id', USER_ID);
+  if (error) {
+    todos = prev;
+    saveTodosToLS();
+    renderDaily();
+    toast('Sync error — try again');
+  }
+}
+
+function renderDaily() {
+  if (!document.getElementById('daily-list')) return;
+
+  /* Date chip */
+  const now = new Date();
+  const chip = document.getElementById('daily-date-chip');
+  if (chip) chip.textContent =
+    now.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+  const today      = todayKey();
+  const dailyTodos = todos.filter(t => (t.tags || []).includes('daily'));
+  const overdue    = dailyTodos.filter(t => t.due_date && t.due_date < today).length;
+
+  document.getElementById('daily-stats').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Remaining</div>
+      <div class="stat-value purple">${dailyTodos.length}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Overdue</div>
+      <div class="stat-value pink">${overdue}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Priority</div>
+      <div class="stat-value" style="color:#ef4444;font-size:18px;padding-top:6px">High</div>
+    </div>`;
+
+  if (!dailyTodos.length) {
+    document.getElementById('daily-empty').style.display = 'block';
+    document.getElementById('daily-list').style.display  = 'none';
+    return;
+  }
+  document.getElementById('daily-empty').style.display = 'none';
+  document.getElementById('daily-list').style.display  = 'block';
+
+  document.getElementById('daily-list').innerHTML = dailyTodos.map(t => {
+    const isOverdue = t.due_date && t.due_date < today;
+    return `
+    <div class="daily-card${isOverdue ? ' overdue' : ''}" id="daily-card-${t.id}">
+      <button class="todo-check" onclick="completeDailyTodo('${t.id}')" title="Done — removes task"></button>
+      <span class="daily-text">${t.text}</span>
+      ${isOverdue ? `<span class="todo-due-badge overdue">⚠ ${fmtDate(t.due_date)}</span>` : ''}
+      <button class="todo-action-btn del" onclick="completeDailyTodo('${t.id}')" title="Remove">×</button>
+    </div>`;
+  }).join('');
 }
 
 /* ════════════════════════════════

@@ -566,6 +566,47 @@ select.form-input option { background: #1c2230; }
   text-overflow: ellipsis;
 }
 
+/* ── Daily page ── */
+.daily-date-chip {
+  font-size: 12px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 4px 14px;
+  font-weight: 500;
+}
+.daily-add-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.daily-add-bar .form-input { flex: 1; }
+
+.daily-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 4px solid #ef4444;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  transition: opacity 0.15s;
+}
+.daily-card.completing {
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.daily-card.overdue { border-left-color: #f97316; }
+.daily-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 /* ── To-Do filter bar ── */
 .todo-filter-bar {
   display: flex;

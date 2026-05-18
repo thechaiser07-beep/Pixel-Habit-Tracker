@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pixel — Habit Tracker</title>
+<title>Tasks</title>
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -23,7 +23,7 @@
     <div class="nav-section-label">Habits</div>
     <div class="nav-item active" onclick="nav('pixel')">
       <span class="nav-icon">◫</span>
-      <span>Pixel view</span>
+      <span>Overview</span>
     </div>
     <div class="nav-item" onclick="nav('calendar')">
       <span class="nav-icon">▦</span>
@@ -45,6 +45,10 @@
     <div class="nav-item" onclick="nav('todo')">
       <span class="nav-icon">☑</span>
       <span>Tasks</span>
+    </div>
+    <div class="nav-item" onclick="nav('daily')">
+      <span class="nav-icon">◈</span>
+      <span>Daily</span>
     </div>
   </nav>
   <div class="sidebar-footer">
@@ -170,6 +174,31 @@
       <div class="section-label" style="margin-top:26px">Habit stats</div>
       <div class="hstat-grid" id="gr-stats"></div>
     </div>
+  </div>
+
+  <!-- ── DAILY PAGE ── -->
+  <div class="page" id="page-daily">
+    <div class="page-header">
+      <div class="page-title">Daily</div>
+      <span class="daily-date-chip" id="daily-date-chip"></span>
+    </div>
+
+    <div class="daily-add-bar">
+      <input id="daily-input" class="form-input" type="text"
+             placeholder="Add today's task…"
+             onkeydown="if(event.key==='Enter') addDailyTodo()">
+      <button class="btn btn-primary" onclick="addDailyTodo()">Add</button>
+    </div>
+
+    <div class="stats-row" id="daily-stats"></div>
+
+    <div id="daily-empty" class="empty" style="display:none">
+      <div class="empty-icon">◈</div>
+      <div class="empty-title">All clear!</div>
+      <p>No tasks left for today. Add one above to get started.</p>
+    </div>
+
+    <div id="daily-list"></div>
   </div>
 
   <!-- ── TO-DO PAGE ── -->
