@@ -580,41 +580,57 @@ function renderGraph() {
   document.getElementById('gr-empty').style.display   = 'none';
   document.getElementById('gr-content').style.display = 'block';
 
-  const now    = new Date(); now.setHours(0,0,0,0);
+  const now   = new Date(); now.setHours(0,0,0,0);
+  const total = habits.length;
   const dates  = [];
   const labels = [];
+  const rawPct = []; // daily (done / total) * 100
+
   for (let i = chartRange - 1; i >= 0; i--) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    dates.push(dk(d.getFullYear(), d.getMonth(), d.getDate()));
+    const key = dk(d.getFullYear(), d.getMonth(), d.getDate());
+    dates.push(key);
+
+    const done = habits.filter(h => getSet(h.id).has(key)).length;
+    rawPct.push(Math.round(done / total * 100));
+
     const show = chartRange <= 14 ? true
                : chartRange <= 30 ? (i % 5  === 0 || i === 0)
                :                    (i % 15 === 0 || i === 0);
     labels.push(show ? `${d.getDate()}/${d.getMonth()+1}` : '');
   }
 
-  const win      = chartRange <= 7 ? 3 : chartRange <= 14 ? 5 : 7;
-  const datasets = habits.map(h => {
-    const done = getSet(h.id);
-    const raw  = dates.map(d => done.has(d) ? 1 : 0);
-    const data = chartRange > 7 ? rollingAvg(raw, win) : raw;
-    return {
-      label:               h.name,
-      data,
-      borderColor:         h.color,
-      backgroundColor:     h.color + '20',
-      fill:                true,
-      tension:             0.42,
-      pointRadius:         chartRange > 30 ? 0 : 3,
-      pointHoverRadius:    6,
-      pointBackgroundColor: h.color,
-      borderWidth:         2
-    };
+  /* Smooth only on longer ranges */
+  const win  = chartRange <= 7 ? 1 : chartRange <= 14 ? 3 : 5;
+  const data = win > 1 ? rollingAvg(rawPct, win) : rawPct;
+
+  /* Summary stats */
+  const validDays  = rawPct.filter((_, i) => {
+    const d = new Date(now); d.setDate(now.getDate() - (chartRange - 1 - i));
+    return d <= now;
   });
+  const avgPct  = validDays.length ? Math.round(validDays.reduce((a,b)=>a+b,0) / validDays.length) : 0;
+  const bestPct = validDays.length ? Math.max(...validDays) : 0;
+  const todayPct = rawPct[rawPct.length - 1] ?? 0;
 
   if (chart) chart.destroy();
   chart = new Chart(document.getElementById('gr-canvas'), {
     type: 'line',
-    data: { labels, datasets },
+    data: {
+      labels,
+      datasets: [{
+        label:               'Daily completion',
+        data,
+        borderColor:         '#9d7de8',
+        backgroundColor:     '#9d7de820',
+        fill:                true,
+        tension:             0.42,
+        pointRadius:         chartRange > 30 ? 0 : 4,
+        pointHoverRadius:    7,
+        pointBackgroundColor: '#9d7de8',
+        borderWidth:         2.5
+      }]
+    },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
@@ -628,7 +644,11 @@ function renderGraph() {
           bodyColor:       '#e6edf3',
           padding:         12,
           callbacks: {
-            label: ctx => ` ${ctx.dataset.label}: ${Math.round(ctx.raw * 100)}%`
+            label: ctx => {
+              const idx   = ctx.dataIndex;
+              const done  = habits.filter(h => getSet(h.id).has(dates[idx])).length;
+              return ` ${done} / ${total} habits  (${rawPct[idx]}%)`;
+            }
           }
         }
       },
@@ -639,24 +659,27 @@ function renderGraph() {
           border: { color: 'rgba(255,255,255,0.06)' }
         },
         y: {
-          min: 0, max: 1,
+          min: 0, max: 100,
           grid:   { color: 'rgba(255,255,255,0.04)' },
           border: { color: 'rgba(255,255,255,0.06)' },
           ticks: {
             color: '#8b949e', font: { size: 10.5 },
-            callback: v => Math.round(v * 100) + '%'
+            callback: v => v + '%',
+            stepSize: 25
           }
         }
       }
     }
   });
 
-  document.getElementById('gr-legend').innerHTML = habits.map(h =>
-    `<div class="legend-item">
-       <div class="legend-dot" style="background:${h.color}"></div>${h.name}
-     </div>`
-  ).join('');
+  /* Summary stat chips below chart */
+  document.getElementById('gr-legend').innerHTML = `
+    <div class="legend-item">
+      <div class="legend-dot" style="background:#9d7de8"></div>
+      Daily completion (${total} habit${total !== 1 ? 's' : ''})
+    </div>`;
 
+  /* Per-habit breakdown cards */
   document.getElementById('gr-stats').innerHTML = habits.map(h => {
     const s   = streak(h.id);
     const r   = rate30(h.id);
