@@ -77,6 +77,9 @@ alter table public.todos add column if not exists status text not null default '
 -- 3d. ARCHIVE FLAG on habits
 alter table public.habits add column if not exists archived boolean not null default false;
 
+-- 3e. COMPLETED_AT on todos (date string, set when task is checked off)
+alter table public.todos add column if not exists completed_at text;
+
 
 -- 5. TODOS TABLE
 create table if not exists public.todos (

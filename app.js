@@ -107,7 +107,8 @@ async function loadData() {
     // Todos tables may not exist yet — non-fatal
     if (!tErr) { todos    = tData || []; }
     if (!sErr) { subtasks = sData || []; }
-    autoEscalatePriority(); // background — updates in-memory + Supabase, no await needed
+    autoEscalatePriority();    // background — updates in-memory + Supabase, no await needed
+    archiveOldCompletions();   // background — tags tasks completed ≥ 7 days ago as "Archive"
     saveTodosToLS();
 
     const allHabits = hData || [];
@@ -1117,21 +1118,24 @@ async function toggleTodo(id) {
     await completeDailyTodo(id);
     return;
   }
-  const was       = t.completed;
-  const wasStatus = t.status || (was ? 'done' : 'todo');
-  t.completed     = !was;
-  t.status        = t.completed ? 'done' : 'todo';
+  const was            = t.completed;
+  const wasStatus      = t.status || (was ? 'done' : 'todo');
+  const wasCompletedAt = t.completed_at || null;
+  t.completed          = !was;
+  t.status             = t.completed ? 'done' : 'todo';
+  t.completed_at       = t.completed ? todayKey() : null;
   saveTodosToLS();
   renderTodo();
   if (document.getElementById('page-kanban').classList.contains('active')) renderKanban();
 
   const { error } = await sb.from('todos')
-    .update({ completed: t.completed, status: t.status })
+    .update({ completed: t.completed, status: t.status, completed_at: t.completed_at })
     .eq('id', id).eq('user_id', USER_ID);
 
   if (error) {
-    t.completed = was;
-    t.status    = wasStatus;
+    t.completed    = was;
+    t.status       = wasStatus;
+    t.completed_at = wasCompletedAt;
     saveTodosToLS();
     renderTodo();
     toast('Sync error — try again');
@@ -1341,10 +1345,11 @@ function fmtDate(str) {
 function renderTodo() {
   if (!document.getElementById('todo-stats')) return;
 
-  /* Stats */
-  const total     = todos.length;
-  const completed = todos.filter(t => t.completed).length;
-  const overdue   = todos.filter(t => !t.completed && t.due_date && t.due_date < todayKey()).length;
+  /* Stats — exclude archived tasks from counts */
+  const visible   = todos.filter(t => !(t.tags || []).includes('Archive'));
+  const total     = visible.length;
+  const completed = visible.filter(t => t.completed).length;
+  const overdue   = visible.filter(t => !t.completed && t.due_date && t.due_date < todayKey()).length;
   document.getElementById('todo-stats').innerHTML = `
     <div class="stat-card">
       <div class="stat-label">Total tasks</div>
@@ -1379,6 +1384,8 @@ function renderTodo() {
     if (fStatus === 'completed' && !t.completed)           return false;
     if (fPrio && t.priority !== fPrio)                     return false;
     if (fTag && !(t.tags || []).includes(fTag))            return false;
+    /* Hide archived tasks unless "Archive" tag is explicitly selected */
+    if (fTag !== 'Archive' && (t.tags || []).includes('Archive')) return false;
     return true;
   });
 
@@ -1943,6 +1950,49 @@ function renderDaily() {
       <button class="todo-action-btn del" onclick="completeDailyTodo('${t.id}')" title="Remove">×</button>
     </div>`;
   }).join('');
+}
+
+/* ════════════════════════════════
+   AUTO-ARCHIVE COMPLETED TASKS
+   Adds the "Archive" tag to tasks completed ≥ 7 days ago.
+   Archived tasks are hidden from normal views unless
+   the "Archive" tag filter is explicitly selected.
+   Tasks with no completed_at get stamped today for
+   a fresh 7-day grace period.
+════════════════════════════════ */
+async function archiveOldCompletions() {
+  const today     = new Date(); today.setHours(0,0,0,0);
+  const cutoff    = new Date(today); cutoff.setDate(cutoff.getDate() - 7);
+  const cutoffStr = dk(cutoff.getFullYear(), cutoff.getMonth(), cutoff.getDate());
+
+  /* Backfill: completed tasks with no completed_at get today as grace start */
+  const needsStamp = todos.filter(t => t.completed && !t.completed_at);
+  if (needsStamp.length) {
+    const stamp = todayKey();
+    needsStamp.forEach(t => { t.completed_at = stamp; });
+    saveTodosToLS();
+    await Promise.all(needsStamp.map(t =>
+      sb.from('todos').update({ completed_at: stamp }).eq('id', t.id).eq('user_id', USER_ID)
+    ));
+  }
+
+  /* Archive: completed tasks whose completed_at is before the cutoff and not already tagged */
+  const toArchive = todos.filter(t =>
+    t.completed &&
+    t.completed_at &&
+    t.completed_at <= cutoffStr &&
+    !(t.tags || []).includes('Archive')
+  );
+  if (!toArchive.length) return;
+
+  toArchive.forEach(t => {
+    t.tags = [...(t.tags || []).filter(tg => tg !== 'Archive'), 'Archive'];
+  });
+  saveTodosToLS();
+
+  await Promise.all(toArchive.map(t =>
+    sb.from('todos').update({ tags: t.tags }).eq('id', t.id).eq('user_id', USER_ID)
+  ));
 }
 
 /* ════════════════════════════════
