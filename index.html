@@ -20,47 +20,53 @@
 <div class="sidebar">
   <div class="brand">Pixel<em>.</em></div>
   <nav>
-    <div class="nav-section-label">Habits</div>
-    <div class="nav-item active" onclick="nav('pixel')">
-      <span class="nav-icon">◫</span>
-      <span>Overview</span>
+    <!-- Habits section -->
+    <div class="nav-section-toggle" onclick="toggleNavSection('habits')">
+      <span class="nav-section-label">Habits</span>
+      <span class="nav-toggle-icon" id="habits-toggle-icon">▾</span>
     </div>
-    <div class="nav-item" onclick="nav('calendar')">
-      <span class="nav-icon">▦</span>
-      <span>Calendar</span>
+    <div id="habits-items">
+      <div class="nav-item active" onclick="nav('pixel')">
+        <span class="nav-icon">◫</span><span>Overview</span>
+      </div>
+      <div class="nav-item" onclick="nav('calendar')">
+        <span class="nav-icon">▦</span><span>Calendar</span>
+      </div>
+      <div class="nav-item" onclick="nav('categories')">
+        <span class="nav-icon">⊞</span><span>Categories</span>
+      </div>
+      <div class="nav-item" onclick="nav('archive')">
+        <span class="nav-icon">⊡</span><span>Archive</span>
+      </div>
+      <div class="nav-item" onclick="nav('graph')">
+        <span class="nav-icon">╱</span><span>Graph</span>
+      </div>
     </div>
-    <div class="nav-item" onclick="nav('categories')">
-      <span class="nav-icon">⊞</span>
-      <span>Categories</span>
+
+    <!-- Tasks section -->
+    <div class="nav-section-toggle" onclick="toggleNavSection('tasks')" style="margin-top:6px">
+      <span class="nav-section-label">Tasks</span>
+      <span class="nav-toggle-icon" id="tasks-toggle-icon">▾</span>
     </div>
-    <div class="nav-item" onclick="nav('archive')">
-      <span class="nav-icon">⊡</span>
-      <span>Archive</span>
-    </div>
-    <div class="nav-item" onclick="nav('graph')">
-      <span class="nav-icon">╱</span>
-      <span>Graph</span>
-    </div>
-    <div class="nav-section-label" style="margin-top:18px">Tasks</div>
-    <div class="nav-item" onclick="nav('todo')">
-      <span class="nav-icon">☑</span>
-      <span>Tasks</span>
-    </div>
-    <div class="nav-item" onclick="nav('kanban')">
-      <span class="nav-icon">▥</span>
-      <span>Kanban</span>
-    </div>
-    <div class="nav-item" onclick="nav('timeline')">
-      <span class="nav-icon">╾</span>
-      <span>Gantt</span>
-    </div>
-    <div class="nav-item" onclick="nav('taskcal')">
-      <span class="nav-icon">▦</span>
-      <span>Calendar</span>
-    </div>
-    <div class="nav-item" onclick="nav('daily')">
-      <span class="nav-icon">◈</span>
-      <span>Daily</span>
+    <div id="tasks-items">
+      <div class="nav-item" onclick="nav('todo')">
+        <span class="nav-icon">☑</span><span>Tasks</span>
+      </div>
+      <div class="nav-item" onclick="nav('kanban')">
+        <span class="nav-icon">▥</span><span>Kanban</span>
+      </div>
+      <div class="nav-item" onclick="nav('timeline')">
+        <span class="nav-icon">╾</span><span>Gantt</span>
+      </div>
+      <div class="nav-item" onclick="nav('taskcal')">
+        <span class="nav-icon">▦</span><span>Calendar</span>
+      </div>
+      <div class="nav-item" onclick="nav('daily')">
+        <span class="nav-icon">◈</span><span>Daily</span>
+      </div>
+      <div class="nav-item" onclick="nav('timer')">
+        <span class="nav-icon">◷</span><span>Timer</span>
+      </div>
     </div>
   </nav>
   <div class="sidebar-footer">
@@ -252,6 +258,14 @@
       </div>
     </div>
     <div id="taskcal-content"></div>
+  </div>
+
+  <!-- ── TIMER PAGE ── -->
+  <div class="page" id="page-timer">
+    <div class="page-header">
+      <div class="page-title">Focus Timer</div>
+    </div>
+    <div id="timer-content"></div>
   </div>
 
   <!-- ── DAILY PAGE ── -->
