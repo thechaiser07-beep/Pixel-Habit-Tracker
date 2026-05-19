@@ -106,6 +106,7 @@ async function loadData() {
     // Todos tables may not exist yet — non-fatal
     if (!tErr) { todos    = tData || []; }
     if (!sErr) { subtasks = sData || []; }
+    autoEscalatePriority(); // background — updates in-memory + Supabase, no await needed
     saveTodosToLS();
 
     const allHabits = hData || [];
@@ -980,6 +981,42 @@ function renderCalendar() {
   </div></div>`;
 
   document.getElementById('cal-content').innerHTML = html;
+}
+
+/* ════════════════════════════════
+   AUTO-PRIORITY ESCALATION
+════════════════════════════════ */
+const PRIO_RANK = { low: 0, medium: 1, high: 2 };
+
+async function autoEscalatePriority() {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const toUpdate = [];
+
+  todos.forEach(t => {
+    if (t.completed)                          return; // skip done
+    if (!t.due_date)                          return; // no deadline, nothing to escalate
+    if ((t.tags || []).includes('daily'))     return; // exclude daily tasks
+
+    const daysUntil = Math.round((new Date(t.due_date + 'T00:00:00') - today) / 86400000);
+
+    const needed = daysUntil <= 7 ? 'high' : daysUntil <= 14 ? 'medium' : null;
+    if (!needed) return;                             // more than 2 weeks away
+
+    if ((PRIO_RANK[needed] ?? 1) > (PRIO_RANK[t.priority] ?? 1)) {
+      toUpdate.push({ id: t.id, priority: needed });
+      t.priority = needed;                           // optimistic in-memory update
+    }
+  });
+
+  if (!toUpdate.length) return;
+
+  saveTodosToLS();
+  await Promise.all(
+    toUpdate.map(u =>
+      sb.from('todos').update({ priority: u.priority })
+        .eq('id', u.id).eq('user_id', USER_ID)
+    )
+  );
 }
 
 /* ════════════════════════════════
