@@ -838,10 +838,44 @@ select.form-input option { background: #1c2230; }
 }
 .daily-add-bar {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   margin-bottom: 24px;
 }
-.daily-add-bar .form-input { flex: 1; }
+.daily-input-row {
+  display: flex;
+  gap: 10px;
+}
+.daily-input-row .form-input { flex: 1; }
+.daily-prio-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.daily-prio-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--muted);
+  margin-right: 2px;
+}
+.daily-prio-btn {
+  padding: 4px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.daily-prio-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+.daily-prio-btn.active.prio-high   { background: rgba(239,68,68,0.14);  color: #ef4444;  border-color: #ef4444; }
+.daily-prio-btn.active.prio-medium { background: rgba(234,179,8,0.14);  color: #eab308;  border-color: #eab308; }
+.daily-prio-btn.active.prio-low    { background: rgba(16,185,129,0.14); color: #10b981;  border-color: #10b981; }
 
 .daily-card {
   display: flex;
@@ -849,12 +883,15 @@ select.form-input option { background: #1c2230; }
   gap: 12px;
   background: var(--card);
   border: 1px solid var(--border);
-  border-left: 4px solid #ef4444;
+  border-left: 4px solid var(--dim);
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 8px;
   transition: opacity 0.15s;
 }
+.daily-card.prio-high   { border-left-color: #ef4444; }
+.daily-card.prio-medium { border-left-color: #eab308; }
+.daily-card.prio-low    { border-left-color: #10b981; }
 .daily-card.completing {
   opacity: 0;
   transform: translateX(20px);
@@ -1162,15 +1199,79 @@ select.form-input option { background: #1c2230; }
   border-radius: 2px;
 }
 
-/* ── Mobile tweaks ── */
+/* ══════════════════════════════════
+   MOBILE  ≤ 600 px  (iPhone 14 = 390px)
+   Sidebar collapses to 56px icons;
+   content area ≈ 302 px usable.
+══════════════════════════════════ */
 @media (max-width: 600px) {
-  .sidebar { width: 56px; }
-  .brand { padding: 0 0 24px; text-align: center; font-size: 16px; }
-  .nav-item { padding: 12px; justify-content: center; }
+
+  /* ── Sidebar ── */
+  .sidebar { width: 56px; overflow-y: auto; }
+  .brand { padding: 0 0 20px; text-align: center; font-size: 15px; }
+  .nav-item { padding: 11px 0; justify-content: center; }
   .nav-item span:not(.nav-icon) { display: none; }
+  .nav-section-label { display: none; }
   .sidebar-footer { display: none; }
-  .main { padding: 20px 16px; }
-  .stats-row { grid-template-columns: 1fr 1fr; }
+
+  /* ── Main ── */
+  .main { padding: 18px 14px; }
+
+  /* ── Page header ── */
+  .page-header { flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  .page-title  { font-size: 18px; }
+
+  /* ── Stat cards ── */
+  .stats-row { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
   .stats-row .stat-card:last-child { grid-column: span 2; }
+  .stat-card { padding: 14px 16px; }
+  .stat-value { font-size: 22px; }
+
+  /* ── Category & archive grids ── */
+  .cat-grid  { grid-template-columns: 1fr; }
+  .arch-list { grid-template-columns: 1fr; }
+  .arch-card-header { flex-wrap: wrap; gap: 8px; }
+
+  /* ── Habit stat cards ── */
   .hstat-grid { grid-template-columns: 1fr; }
+
+  /* ── Todo filter bar ── */
+  .todo-filter-bar { flex-direction: column; gap: 8px; }
+  .todo-filter-bar .form-input { width: 100%; min-width: unset; flex: none; }
+
+  /* ── Todo cards ── */
+  .todo-actions { gap: 0; }
+  .todo-action-btn { padding: 4px 5px; }
+
+  /* ── Kanban ── */
+  .kanban-board { grid-template-columns: 1fr; }
+  .kb-card-actions { flex-wrap: wrap; gap: 4px; }
+
+  /* ── Gantt ── */
+  .gantt-controls { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+  /* ── Month nav ── */
+  .month-name { min-width: 110px; font-size: 13px; }
+
+  /* ── Daily ── */
+  .daily-date-chip { font-size: 11px; padding: 3px 10px; }
+  .daily-prio-btn  { padding: 4px 10px; font-size: 11px; }
+
+  /* ── Smooth scroll for grids ── */
+  .pixel-scroll,
+  .gantt-scroll,
+  .taskcal-wrap,
+  .cal-wrap { -webkit-overflow-scrolling: touch; }
+
+  /* ── Modal ── */
+  .modal { max-height: calc(100dvh - 24px); }
+  .modal-body { padding: 16px 18px; }
+  .modal-footer { padding: 12px 18px; }
+
+  /* ── Toast ── */
+  .toast { bottom: 16px; right: 16px; left: 16px; right: 16px; text-align: center; }
+
+  /* ── Chart ── */
+  .chart-card canvas { max-height: 220px; }
+  .range-row { flex-wrap: wrap; gap: 5px; }
 }

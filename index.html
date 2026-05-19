@@ -262,10 +262,18 @@
     </div>
 
     <div class="daily-add-bar">
-      <input id="daily-input" class="form-input" type="text"
-             placeholder="Add today's task…"
-             onkeydown="if(event.key==='Enter') addDailyTodo()">
-      <button class="btn btn-primary" onclick="addDailyTodo()">Add</button>
+      <div class="daily-input-row">
+        <input id="daily-input" class="form-input" type="text"
+               placeholder="Add today's task…"
+               onkeydown="if(event.key==='Enter') addDailyTodo()">
+        <button class="btn btn-primary" onclick="addDailyTodo()">Add</button>
+      </div>
+      <div class="daily-prio-row">
+        <span class="daily-prio-label">Priority</span>
+        <button class="daily-prio-btn prio-low"    onclick="setDailyPrio('low',this)">Low</button>
+        <button class="daily-prio-btn prio-medium" onclick="setDailyPrio('medium',this)">Medium</button>
+        <button class="daily-prio-btn prio-high active" onclick="setDailyPrio('high',this)">High</button>
+      </div>
     </div>
 
     <div class="stats-row" id="daily-stats"></div>

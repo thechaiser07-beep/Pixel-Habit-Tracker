@@ -43,6 +43,7 @@ let calYear        = new Date().getFullYear();
 let chart          = null;
 let chartRange     = 7;
 let busy           = false;
+let dailyPriority  = 'high';
 let todoEditId     = null;
 let tdDragId       = null;
 let kbDragId       = null;
@@ -1791,6 +1792,14 @@ function renderKanban() {
 /* ════════════════════════════════
    DAILY PAGE
 ════════════════════════════════ */
+function setDailyPrio(p, btn) {
+  dailyPriority = p;
+  document.querySelectorAll('.daily-prio-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  /* Refresh stats card colour */
+  renderDaily();
+}
+
 async function addDailyTodo() {
   const inp  = document.getElementById('daily-input');
   const text = inp.value.trim();
@@ -1801,7 +1810,7 @@ async function addDailyTodo() {
     user_id:     USER_ID,
     text,
     completed:   false,
-    priority:    'high',
+    priority:    dailyPriority,
     tags:        ['daily'],
     due_date:    todayKey(),
     order_index: todos.length,
@@ -1860,6 +1869,8 @@ function renderDaily() {
   const dailyTodos = todos.filter(t => (t.tags || []).includes('daily'));
   const overdue    = dailyTodos.filter(t => t.due_date && t.due_date < today).length;
 
+  const prioMeta = { high: { color: '#ef4444', label: 'High' }, medium: { color: '#eab308', label: 'Medium' }, low: { color: '#10b981', label: 'Low' } };
+  const pm = prioMeta[dailyPriority] || prioMeta.high;
   document.getElementById('daily-stats').innerHTML = `
     <div class="stat-card">
       <div class="stat-label">Remaining</div>
@@ -1870,8 +1881,8 @@ function renderDaily() {
       <div class="stat-value pink">${overdue}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Priority</div>
-      <div class="stat-value" style="color:#ef4444;font-size:18px;padding-top:6px">High</div>
+      <div class="stat-label">New task priority</div>
+      <div class="stat-value" style="color:${pm.color};font-size:18px;padding-top:6px">${pm.label}</div>
     </div>`;
 
   if (!dailyTodos.length) {
@@ -1885,7 +1896,7 @@ function renderDaily() {
   document.getElementById('daily-list').innerHTML = dailyTodos.map(t => {
     const isOverdue = t.due_date && t.due_date < today;
     return `
-    <div class="daily-card${isOverdue ? ' overdue' : ''}" id="daily-card-${t.id}">
+    <div class="daily-card prio-${t.priority || 'high'}${isOverdue ? ' overdue' : ''}" id="daily-card-${t.id}">
       <button class="todo-check" onclick="completeDailyTodo('${t.id}')" title="Done — removes task"></button>
       <span class="daily-text">${t.text}</span>
       ${isOverdue ? `<span class="todo-due-badge overdue">⚠ ${fmtDate(t.due_date)}</span>` : ''}
