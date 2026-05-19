@@ -50,15 +50,6 @@ let kbDragId       = null;
 let reorderTimer   = null;
 const openPanels   = new Set(); // tracks which subtask panels are expanded
 
-/* Timer */
-let timerInterval  = null;
-let timerSeconds   = 25 * 60;
-let timerTotal     = 25 * 60;
-let timerRunning   = false;
-let timerPomos     = 0;
-let timerTaskId    = '';
-let timerMode      = 'focus'; // 'focus' | 'short' | 'long'
-const TIMER_DURATIONS = { focus: 25, short: 5, long: 15 };
 
 /* ════════════════════════════════
    LOADING / ERROR
@@ -161,7 +152,7 @@ function nav(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
-  const idx = ['pixel','calendar','categories','archive','graph','todo','kanban','timeline','taskcal','daily','timer'].indexOf(id);
+  const idx = ['pixel','calendar','categories','archive','graph','todo','kanban','timeline','taskcal','daily'].indexOf(id);
   document.querySelectorAll('.nav-item')[idx].classList.add('active');
   if (id === 'pixel')      renderPixel();
   if (id === 'categories') renderCategories();
@@ -173,7 +164,6 @@ function nav(id) {
   if (id === 'timeline')   renderTimeline();
   if (id === 'taskcal')    renderTaskCal();
   if (id === 'daily')      renderDaily();
-  if (id === 'timer')      renderTimer();
 }
 
 /* ════════════════════════════════
@@ -1992,191 +1982,6 @@ function initNavSections() {
       if (icon) icon.classList.remove('collapsed');
     }
   });
-}
-
-/* ════════════════════════════════
-   FOCUS TIMER
-════════════════════════════════ */
-function renderTimer() {
-  const activeTodos = todos.filter(t => !t.completed && !(t.tags || []).includes('daily'));
-  const taskOptions = activeTodos.map(t =>
-    `<option value="${t.id}" ${t.id === timerTaskId ? 'selected' : ''}>${t.text.slice(0, 50)}</option>`
-  ).join('');
-
-  document.getElementById('timer-content').innerHTML = `
-    <div class="timer-wrap">
-      <div class="timer-modes">
-        <button class="timer-mode-btn ${timerMode==='focus'?'active':''}"  onclick="setTimerMode('focus')">Focus</button>
-        <button class="timer-mode-btn ${timerMode==='short'?'active':''}"  onclick="setTimerMode('short')">Short Break</button>
-        <button class="timer-mode-btn ${timerMode==='long'?'active':''}"   onclick="setTimerMode('long')">Long Break</button>
-      </div>
-
-      <div class="timer-ring-wrap">
-        <svg class="timer-ring" viewBox="0 0 220 220">
-          <circle class="timer-ring-bg"   cx="110" cy="110" r="100"/>
-          <circle class="timer-ring-fill" cx="110" cy="110" r="100" id="timer-ring-fill"/>
-        </svg>
-        <div class="timer-display">
-          <div class="timer-time" id="timer-time">${fmtTimerTime(timerSeconds)}</div>
-          <div class="timer-mode-label" id="timer-mode-label">${timerMode === 'focus' ? 'Focus' : timerMode === 'short' ? 'Short Break' : 'Long Break'}</div>
-        </div>
-      </div>
-
-      <div class="timer-controls">
-        <button class="timer-btn-secondary" onclick="resetTimer()" title="Reset">↺</button>
-        <button class="timer-btn-primary" id="timer-start-btn" onclick="toggleTimer()">${timerRunning ? 'Pause' : 'Start'}</button>
-        <button class="timer-btn-secondary" onclick="skipTimer()" title="Skip">⏭</button>
-      </div>
-
-      <div class="timer-pomos" id="timer-pomos">
-        ${renderPomoDots()}
-      </div>
-
-      <div style="width:100%">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Link to task (optional)</div>
-        <select class="timer-task-select" onchange="timerTaskId=this.value">
-          <option value="">— no task —</option>
-          ${taskOptions}
-        </select>
-      </div>
-
-      <div style="width:100%;display:flex;flex-direction:column;gap:10px">
-        <div class="timer-custom-row">
-          <span class="timer-custom-label">Focus (min)</span>
-          <input type="number" class="timer-custom-input" id="timer-focus-input" value="${TIMER_DURATIONS.focus}" min="1" max="120"
-            onchange="TIMER_DURATIONS.focus=+this.value; if(timerMode==='focus'&&!timerRunning) setTimerMode('focus')">
-        </div>
-        <div class="timer-custom-row">
-          <span class="timer-custom-label">Short break</span>
-          <input type="number" class="timer-custom-input" id="timer-short-input" value="${TIMER_DURATIONS.short}" min="1" max="60"
-            onchange="TIMER_DURATIONS.short=+this.value; if(timerMode==='short'&&!timerRunning) setTimerMode('short')">
-        </div>
-        <div class="timer-custom-row">
-          <span class="timer-custom-label">Long break</span>
-          <input type="number" class="timer-custom-input" id="timer-long-input" value="${TIMER_DURATIONS.long}" min="1" max="120"
-            onchange="TIMER_DURATIONS.long=+this.value; if(timerMode==='long'&&!timerRunning) setTimerMode('long')">
-        </div>
-      </div>
-    </div>`;
-
-  updateTimerDisplay();
-}
-
-function renderPomoDots() {
-  let dots = '';
-  for (let i = 0; i < 4; i++) {
-    dots += `<div class="timer-pomo-dot ${i < (timerPomos % 4) ? 'done' : ''}"></div>`;
-  }
-  return `<span style="font-size:12px;color:var(--muted);margin-right:6px">Pomodoros</span>${dots}
-    <span style="font-size:12px;color:var(--muted);margin-left:6px">${timerPomos}</span>`;
-}
-
-function setTimerMode(mode) {
-  if (timerRunning) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-    timerRunning  = false;
-  }
-  timerMode    = mode;
-  timerSeconds = TIMER_DURATIONS[mode] * 60;
-  timerTotal   = timerSeconds;
-  renderTimer();
-}
-
-function toggleTimer() {
-  if (timerRunning) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-    timerRunning  = false;
-    const btn = document.getElementById('timer-start-btn');
-    if (btn) btn.textContent = 'Start';
-  } else {
-    timerRunning  = true;
-    timerInterval = setInterval(tickTimer, 1000);
-    const btn = document.getElementById('timer-start-btn');
-    if (btn) btn.textContent = 'Pause';
-  }
-}
-
-function tickTimer() {
-  if (timerSeconds <= 0) {
-    timerDone();
-    return;
-  }
-  timerSeconds--;
-  updateTimerDisplay();
-}
-
-function timerDone() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  timerRunning  = false;
-  if (timerMode === 'focus') timerPomos++;
-  playDone();
-  toast(timerMode === 'focus' ? `Focus session done! 🎉 Pomodoro #${timerPomos}` : 'Break over — back to focus!');
-  /* Auto-advance: after focus → short break (every 4th → long break) */
-  const nextMode = timerMode === 'focus'
-    ? (timerPomos % 4 === 0 ? 'long' : 'short')
-    : 'focus';
-  timerMode    = nextMode;
-  timerSeconds = TIMER_DURATIONS[nextMode] * 60;
-  timerTotal   = timerSeconds;
-  renderTimer();
-}
-
-function resetTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  timerRunning  = false;
-  timerSeconds  = TIMER_DURATIONS[timerMode] * 60;
-  timerTotal    = timerSeconds;
-  renderTimer();
-}
-
-function skipTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-  timerRunning  = false;
-  timerDone();
-}
-
-function updateTimerDisplay() {
-  const timeEl = document.getElementById('timer-time');
-  const ringEl = document.getElementById('timer-ring-fill');
-  const pomosEl = document.getElementById('timer-pomos');
-  if (timeEl) timeEl.textContent = fmtTimerTime(timerSeconds);
-  if (ringEl) {
-    const circumference = 2 * Math.PI * 100; // r=100
-    const progress = timerTotal > 0 ? timerSeconds / timerTotal : 1;
-    ringEl.style.strokeDashoffset = circumference * (1 - progress);
-    /* Colour shift: green when plenty of time, red when < 20% left */
-    ringEl.style.stroke = progress > 0.5 ? 'var(--accent-light)' : progress > 0.2 ? '#eab308' : '#ef4444';
-  }
-  if (pomosEl) pomosEl.innerHTML = renderPomoDots();
-}
-
-function fmtTimerTime(secs) {
-  const m = Math.floor(secs / 60).toString().padStart(2, '0');
-  const s = (secs % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-}
-
-function playDone() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.25, 0.5].forEach(offset => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.type      = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.35, ctx.currentTime + offset);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + offset + 0.4);
-      osc.start(ctx.currentTime + offset);
-      osc.stop(ctx.currentTime + offset + 0.4);
-    });
-  } catch(e) { /* audio unavailable */ }
 }
 
 /* ════════════════════════════════
