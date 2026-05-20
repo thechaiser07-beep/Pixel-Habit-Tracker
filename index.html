@@ -16,8 +16,11 @@
   <div class="loading-label">Loading your habits…</div>
 </div>
 
+<!-- ══════════ MOBILE NAV OVERLAY ══════════ -->
+<div class="mob-overlay" id="mob-overlay" onclick="closeMobileNav()"></div>
+
 <!-- ══════════ SIDEBAR ══════════ -->
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
   <div class="brand">Pixel<em>.</em></div>
   <nav>
     <!-- Habits section -->
@@ -75,6 +78,7 @@
 
 <!-- ══════════ MAIN ══════════ -->
 <div class="main">
+  <button class="mob-menu-btn" id="mob-menu-btn" onclick="openMobileNav()" aria-label="Open menu">☰</button>
 
   <!-- ── PIXEL PAGE ── -->
   <div class="page active" id="page-pixel">

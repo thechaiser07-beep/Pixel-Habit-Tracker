@@ -150,6 +150,7 @@ async function seedDefaultCategories() {
    NAV
 ════════════════════════════════ */
 function nav(id) {
+  closeMobileNav();
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
@@ -1993,6 +1994,18 @@ async function archiveOldCompletions() {
   await Promise.all(toArchive.map(t =>
     sb.from('todos').update({ tags: t.tags }).eq('id', t.id).eq('user_id', USER_ID)
   ));
+}
+
+/* ════════════════════════════════
+   MOBILE NAV
+════════════════════════════════ */
+function openMobileNav() {
+  document.getElementById('sidebar').classList.add('mob-open');
+  document.getElementById('mob-overlay').style.display = 'block';
+}
+function closeMobileNav() {
+  document.getElementById('sidebar').classList.remove('mob-open');
+  document.getElementById('mob-overlay').style.display = 'none';
 }
 
 /* ════════════════════════════════
