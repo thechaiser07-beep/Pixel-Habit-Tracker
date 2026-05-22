@@ -2002,10 +2002,12 @@ async function archiveOldCompletions() {
 function openMobileNav() {
   document.getElementById('sidebar').classList.add('mob-open');
   document.getElementById('mob-overlay').style.display = 'block';
+  document.getElementById('mob-menu-btn').style.display = 'none';
 }
 function closeMobileNav() {
   document.getElementById('sidebar').classList.remove('mob-open');
   document.getElementById('mob-overlay').style.display = 'none';
+  document.getElementById('mob-menu-btn').style.display = '';
 }
 
 /* ════════════════════════════════
