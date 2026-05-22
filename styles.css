@@ -103,17 +103,17 @@ body {
   line-height: 1.7;
 }
 
-/* ── Mobile page-title tap-to-open (activated via JS on mobile) ── */
-.page-title.mob-nav-trigger {
+/* ── Mobile hamburger button (hidden on desktop) ── */
+.mob-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
   cursor: pointer;
-  user-select: none;
-}
-.page-title.mob-nav-trigger::before {
-  content: '☰';
-  font-size: 16px;
-  margin-right: 10px;
-  opacity: 0.5;
-  vertical-align: middle;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 /* ── Mobile overlay (hidden on desktop) ── */
@@ -1247,6 +1247,11 @@ select.form-input option { background: #1c2230; }
    content area ≈ 302 px usable.
 ══════════════════════════════════ */
 @media (max-width: 600px) {
+
+  /* ── Hamburger button ── */
+  .mob-menu-btn { display: block; }
+  /* Page header: button sits left of the title naturally via flex */
+  .page-header { position: relative; }
 
   /* ── Sidebar: hidden off-screen, slides in ── */
   .sidebar {

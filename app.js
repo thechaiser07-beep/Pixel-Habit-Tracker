@@ -150,7 +150,7 @@ async function seedDefaultCategories() {
    NAV
 ════════════════════════════════ */
 function nav(id) {
-  closeMobileNav();
+  closeMobileNav(); // also calls placeMobMenuBtn after sidebar closes
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
@@ -166,6 +166,7 @@ function nav(id) {
   if (id === 'timeline')   renderTimeline();
   if (id === 'taskcal')    renderTaskCal();
   if (id === 'daily')      renderDaily();
+  placeMobMenuBtn(); // move burger button into the new page's header
 }
 
 /* ════════════════════════════════
@@ -2002,17 +2003,27 @@ async function archiveOldCompletions() {
 function openMobileNav() {
   document.getElementById('sidebar').classList.add('mob-open');
   document.getElementById('mob-overlay').style.display = 'block';
+  document.getElementById('mob-menu-btn').style.display = 'none';
 }
 function closeMobileNav() {
   document.getElementById('sidebar').classList.remove('mob-open');
   document.getElementById('mob-overlay').style.display = 'none';
+  placeMobMenuBtn();
+}
+function placeMobMenuBtn() {
+  if (window.innerWidth > 600) return;
+  const btn = document.getElementById('mob-menu-btn');
+  /* Find the header of the currently active page */
+  const activePage = document.querySelector('.page.active');
+  if (!activePage) return;
+  const header = activePage.querySelector('.page-header');
+  if (!header) return;
+  /* Move button to be the first child of that header */
+  header.insertBefore(btn, header.firstChild);
+  btn.style.display = 'block';
 }
 function initMobileNav() {
-  if (window.innerWidth > 600) return;
-  document.querySelectorAll('.page-title').forEach(el => {
-    el.classList.add('mob-nav-trigger');
-    el.addEventListener('click', openMobileNav);
-  });
+  placeMobMenuBtn();
 }
 
 /* ════════════════════════════════
