@@ -1,14 +1,171 @@
 /* ════════════════════════════════════════════════
-   CONFIG
+   CONFIG  —  fill in your Turso credentials
    ════════════════════════════════════════════════ */
-const SUPABASE_URL = 'https://wujgoaamahfwxexhsolg.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1amdvYWFtYWhmd3hleGhzb2xnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTg5MDAsImV4cCI6MjA5NDYzNDkwMH0.n4sDVglbfNoSPeyRaQrVN1TPT8TgJcr5DFXPdWTna2k';
-const USER_ID      = 'Chaise_Baker';
+const TURSO_URL   = 'https://pixel-habit-and-task-tracker-tbocx.aws-ap-northeast-1.turso.io';
+const TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3Nzk3MTg3MDYsImlkIjoiMDE5ZTVmN2EtY2QwMS03MzFkLTg3MzYtMDU2YWIyYWJmNDdjIiwicmlkIjoiYmMwMTg4YmItNjM1OC00NzdkLTlhYWUtMDM0NjE5ZDY4MzgzIn0.f-JvRF6vAji1K0saF3cMlI5dIJlvNzQI_YVYBhewfuo8it9li9jHuUgEfCA-L7wDtswW8Wcc2r44djh2Kc3FCQ';
+const USER_ID     = 'Chaise_Baker';
 
 /* ════════════════════════════════
-   INIT
+   TURSO DATABASE LAYER
+   Thin shim that mimics the Supabase
+   query API using Turso's HTTP endpoint.
 ════════════════════════════════ */
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Which columns need type coercion per table
+const _SCHEMA = {
+  habits:      { bools: ['archived'],              jsons: [] },
+  completions: { bools: [],                         jsons: [] },
+  categories:  { bools: [],                         jsons: [] },
+  todos:       { bools: ['completed'],              jsons: ['tags'] },
+  subtasks:    { bools: ['completed'],              jsons: [] },
+};
+
+async function _tursoExec(sql, args = []) {
+  const res = await fetch(`${TURSO_URL}/v2/pipeline`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${TURSO_TOKEN}`,
+      'Content-Type':  'application/json'
+    },
+    body: JSON.stringify({
+      requests: [{ type: 'execute', stmt: { sql, args: args.map(_toArg) } }]
+    })
+  });
+  if (!res.ok) throw new Error(`Turso HTTP ${res.status}`);
+  const json = await res.json();
+  const r    = json.results?.[0];
+  if (!r || r.type === 'error') throw new Error(r?.error?.message || 'Turso error');
+  return _parseRows(r.response.result);
+}
+
+function _toArg(v) {
+  if (v === null || v === undefined) return { type: 'null' };
+  if (typeof v === 'boolean')        return { type: 'integer', value: v ? '1' : '0' };
+  if (typeof v === 'number')         return { type: 'integer', value: String(v) };
+  if (Array.isArray(v))              return { type: 'text',    value: JSON.stringify(v) };
+  return { type: 'text', value: String(v) };
+}
+
+function _parseRows({ cols, rows } = {}) {
+  if (!cols) return [];
+  const names = cols.map(c => c.name);
+  return rows.map(row => {
+    const obj = {};
+    names.forEach((n, i) => { obj[n] = row[i]?.value ?? null; });
+    return obj;
+  });
+}
+
+function _deserialize(table, row) {
+  const { bools = [], jsons = [] } = _SCHEMA[table] || {};
+  const out = { ...row };
+  bools.forEach(c => {
+    if (c in out) out[c] = out[c] === '1' || out[c] === 1 || out[c] === true || out[c] === 'true' || out[c] === 't';
+  });
+  jsons.forEach(c => {
+    if (!(c in out)) return;
+    const v = out[c];
+    if (Array.isArray(v)) { out[c] = v; return; }
+    if (!v || v === '{}') { out[c] = []; return; }
+    // Postgres array format: {tag1,tag2} → ["tag1","tag2"]
+    if (typeof v === 'string' && v.startsWith('{')) {
+      out[c] = v.slice(1, -1).split(',').map(s => s.trim()).filter(Boolean);
+      return;
+    }
+    try { out[c] = JSON.parse(v); } catch { out[c] = []; }
+  });
+  return out;
+}
+
+function _serialize(table, row) {
+  const { bools = [], jsons = [] } = _SCHEMA[table] || {};
+  const out = { ...row };
+  bools.forEach(c => { if (c in out) out[c] = out[c] ? 1 : 0; });
+  jsons.forEach(c => { if (c in out && Array.isArray(out[c])) out[c] = JSON.stringify(out[c]); });
+  return out;
+}
+
+class _Q {
+  constructor(table) {
+    this._t  = table;
+    this._op = null;
+    this._cols = '*';
+    this._ws = [];     // [{col, val}]
+    this._ord = null;
+    this._dat = null;
+  }
+  select(cols = '*') { this._op = 'select'; this._cols = cols; return this; }
+  insert(d)          { this._op = 'insert'; this._dat = [].concat(d); return this; }
+  upsert(d)          { this._op = 'upsert'; this._dat = [].concat(d); return this; }
+  update(d)          { this._op = 'update'; this._dat = d; return this; }
+  delete()           { this._op = 'delete'; return this; }
+  eq(col, val)       { this._ws.push({ col, val }); return this; }
+  order(col)         { this._ord = col; return this; }
+
+  _where() {
+    if (!this._ws.length) return { sql: '', args: [] };
+    return {
+      sql:  ' WHERE ' + this._ws.map(w => `${w.col} = ?`).join(' AND '),
+      args: this._ws.map(w => w.val)
+    };
+  }
+
+  async _run() {
+    const t = this._t;
+    try {
+      if (this._op === 'select') {
+        const w   = this._where();
+        const ord = this._ord ? ` ORDER BY ${this._ord}` : '';
+        const rows = await _tursoExec(`SELECT ${this._cols} FROM ${t}${w.sql}${ord}`, w.args);
+        return { data: rows.map(r => _deserialize(t, r)), error: null };
+      }
+      if (this._op === 'insert') {
+        for (const raw of this._dat) {
+          const row  = _serialize(t, raw);
+          const keys = Object.keys(row);
+          await _tursoExec(
+            `INSERT INTO ${t} (${keys}) VALUES (${keys.map(() => '?')})`,
+            keys.map(k => row[k])
+          );
+        }
+        return { data: null, error: null };
+      }
+      if (this._op === 'upsert') {
+        for (const raw of this._dat) {
+          const row  = _serialize(t, raw);
+          const keys = Object.keys(row);
+          await _tursoExec(
+            `INSERT OR REPLACE INTO ${t} (${keys}) VALUES (${keys.map(() => '?')})`,
+            keys.map(k => row[k])
+          );
+        }
+        return { data: null, error: null };
+      }
+      if (this._op === 'update') {
+        const row  = _serialize(t, this._dat);
+        const keys = Object.keys(row);
+        const w    = this._where();
+        await _tursoExec(
+          `UPDATE ${t} SET ${keys.map(k => `${k} = ?`).join(', ')}${w.sql}`,
+          [...keys.map(k => row[k]), ...w.args]
+        );
+        return { data: null, error: null };
+      }
+      if (this._op === 'delete') {
+        const w = this._where();
+        await _tursoExec(`DELETE FROM ${t}${w.sql}`, w.args);
+        return { data: null, error: null };
+      }
+    } catch(e) {
+      console.error('DB error:', e);
+      return { data: null, error: e };
+    }
+  }
+
+  then(resolve, reject) { this._run().then(resolve, reject); }
+}
+
+const sb = { from: (table) => new _Q(table) };
 
 const PALETTE = [
   '#7c5cbf','#9d7de8','#ec4899','#f97316',
@@ -68,23 +225,48 @@ function showError(msg) {
 }
 
 /* ════════════════════════════════
-   DATA — Supabase
+   DATA — Local Storage
+   Full cache of all tables so the app
+   works offline and paints instantly.
 ════════════════════════════════ */
-function saveTodosToLS() {
+function saveAllToLS() {
   try {
-    localStorage.setItem(`px_todos_${USER_ID}`,    JSON.stringify(todos));
-    localStorage.setItem(`px_subs_${USER_ID}`,     JSON.stringify(subtasks));
-  } catch {}
+    localStorage.setItem(`px_habits_${USER_ID}`,      JSON.stringify(habits));
+    localStorage.setItem(`px_archived_${USER_ID}`,    JSON.stringify(archivedHabits));
+    localStorage.setItem(`px_categories_${USER_ID}`,  JSON.stringify(categories));
+    localStorage.setItem(`px_todos_${USER_ID}`,       JSON.stringify(todos));
+    localStorage.setItem(`px_subs_${USER_ID}`,        JSON.stringify(subtasks));
+    /* Completions: convert Set values → arrays for JSON */
+    const compSerial = Object.fromEntries(
+      Object.entries(completions).map(([k, s]) => [k, [...s]])
+    );
+    localStorage.setItem(`px_completions_${USER_ID}`, JSON.stringify(compSerial));
+  } catch(e) { console.warn('LS save failed', e); }
 }
-function loadTodosFromLS() {
+
+/* Keep old name as alias so existing callers still work */
+const saveTodosToLS = saveAllToLS;
+
+function loadAllFromLS() {
   try {
-    todos    = JSON.parse(localStorage.getItem(`px_todos_${USER_ID}`)    || '[]');
-    subtasks = JSON.parse(localStorage.getItem(`px_subs_${USER_ID}`)     || '[]');
-  } catch { todos = []; subtasks = []; }
+    habits         = JSON.parse(localStorage.getItem(`px_habits_${USER_ID}`)     || '[]');
+    archivedHabits = JSON.parse(localStorage.getItem(`px_archived_${USER_ID}`)   || '[]');
+    categories     = JSON.parse(localStorage.getItem(`px_categories_${USER_ID}`) || '[]');
+    todos          = JSON.parse(localStorage.getItem(`px_todos_${USER_ID}`)       || '[]');
+    subtasks       = JSON.parse(localStorage.getItem(`px_subs_${USER_ID}`)        || '[]');
+    /* Completions: restore arrays → Sets */
+    const raw = JSON.parse(localStorage.getItem(`px_completions_${USER_ID}`) || '{}');
+    completions = Object.fromEntries(
+      Object.entries(raw).map(([k, a]) => [k, new Set(a)])
+    );
+  } catch(e) {
+    habits = []; archivedHabits = []; categories = [];
+    todos  = []; subtasks = []; completions = {};
+  }
 }
 
 async function loadData() {
-  loadTodosFromLS(); // instant paint from cache while Supabase loads
+  loadAllFromLS(); // instant paint from cache while Turso loads
   showLoading(true);
   try {
     const [
@@ -107,10 +289,6 @@ async function loadData() {
     // Todos tables may not exist yet — non-fatal
     if (!tErr) { todos    = tData || []; }
     if (!sErr) { subtasks = sData || []; }
-    autoEscalatePriority();    // background — updates in-memory + Supabase, no await needed
-    archiveOldCompletions();   // background — tags tasks completed ≥ 7 days ago as "Archive"
-    saveTodosToLS();
-
     const allHabits = hData || [];
     archivedHabits  = allHabits.filter(h => h.archived);
     habits          = allHabits.filter(h => !h.archived);
@@ -119,15 +297,20 @@ async function loadData() {
       if (!completions[c.habit_id]) completions[c.habit_id] = new Set();
       completions[c.habit_id].add(c.date);
     });
-
     categories = catData || [];
+    if (!tErr) { todos    = tData || []; }
+    if (!sErr) { subtasks = sData || []; }
 
     /* Seed defaults on first run */
     if (categories.length === 0) await seedDefaultCategories();
 
+    autoEscalatePriority();    // background — escalates priority by due date
+    archiveOldCompletions();   // background — tags tasks completed ≥ 7 days ago
+    saveAllToLS();             // persist everything locally
+
   } catch (err) {
     console.error(err);
-    showError('Could not connect to database. Check your Supabase config.');
+    showError('Could not connect to Turso. Showing cached data.');
   } finally {
     showLoading(false);
     renderPixel();
@@ -143,7 +326,7 @@ async function seedDefaultCategories() {
     user_id:    USER_ID
   }));
   const { data, error } = await sb.from('categories').insert(rows).select();
-  if (!error) categories = data || rows;
+  if (!error) { categories = data || rows; saveAllToLS(); }
 }
 
 /* ════════════════════════════════
@@ -413,6 +596,8 @@ async function toggle(hid, key) {
     renderPixel();
     toast('Sync error — try again');
     console.error(error);
+  } else {
+    saveAllToLS();
   }
 
   busy = false;
@@ -533,6 +718,7 @@ async function addCategory() {
 
   categories.push(cat);
   categories.sort((a,b) => a.name.localeCompare(b.name));
+  saveAllToLS();
   toast(`"${name}" added!`);
   closeCatModal();
   renderCategories();
@@ -550,6 +736,7 @@ async function delCategory(id) {
   if (error) { toast('Error deleting category'); console.error(error); return; }
 
   categories = categories.filter(c => c.id !== id);
+  saveAllToLS();
   toast(`"${cat.name}" deleted`);
   renderCategories();
 }
@@ -584,6 +771,7 @@ async function addHabit() {
 
   habits.push(h);
   completions[h.id] = new Set();
+  saveAllToLS();
   document.getElementById('f-name').value = '';
   toast(`"${name}" added!`);
   renderModalContents();
@@ -596,6 +784,7 @@ async function delHabit(id) {
 
   habits = habits.filter(h => h.id !== id);
   delete completions[id];
+  saveAllToLS();
   toast('Habit removed');
   renderModalContents();
   renderPixel();
@@ -781,6 +970,7 @@ async function archiveHabit(id) {
   habits = habits.filter(h => h.id !== id);
   h.archived = true;
   archivedHabits.push(h);
+  saveAllToLS();
   toast(`"${h.name}" archived`);
   renderModalContents();
   renderPixel();
@@ -794,6 +984,7 @@ async function unarchiveHabit(id) {
   archivedHabits = archivedHabits.filter(h => h.id !== id);
   h.archived = false;
   habits.push(h);
+  saveAllToLS();
   toast(`"${h.name}" restored`);
   renderArchive();
 }
@@ -806,6 +997,7 @@ async function delArchivedHabit(id) {
   if (error) { toast('Error deleting habit'); console.error(error); return; }
   archivedHabits = archivedHabits.filter(h => h.id !== id);
   delete completions[id];
+  saveAllToLS();
   toast(`"${h.name}" deleted permanently`);
   renderArchive();
 }
